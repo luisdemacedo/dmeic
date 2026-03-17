@@ -1,0 +1,4 @@
+:-e .gitignore
+- .git
+- .gdbinit
+- *.el

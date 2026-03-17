@@ -1,0 +1,15 @@
+diff --git a/cplex.make b/cplex.make
+index 7b0092f..fda4234 100644
+--- a/cplex.make
++++ b/cplex.make
+@@ -1,8 +1,8 @@
+ SYSTEM     = x86-64_linux
+ LIBFORMAT  = static_pic
+ 
+-CPLEXDIR      = /opt/ibm/ILOG/CPLEX_Studio201/cplex
+-CONCERTDIR    = /opt/ibm/ILOG/CPLEX_Studio201/concert
++CPLEXDIR      = /home/jcortes/ibm/ILOG/CPLEX_Studio201/cplex
++CONCERTDIR    = /home/jcortes/ibm/ILOG/CPLEX_Studio201/concert
+ # ---------------------------------------------------------------------
+ # Compiler options 
+ # ---------------------------------------------------------------------

@@ -1,0 +1,10 @@
+!
+:-e .gitignore
+.- /home/Superficial/Mnemosyne/Aion/moco/.git/info/exclude
+- deployTarget
+- deploy.make
+- deployFilter.rsync
+- .git
+- solverData
+- theory
+- bugs

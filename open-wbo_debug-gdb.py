@@ -1,0 +1,1 @@
+gdb-python/src/prettyThing/loaders/open-wbo-gdb.py

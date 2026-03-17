@@ -1,0 +1,12 @@
+diff -u a/cplexBound.cpp b/cplexBound.cpp
+--- a/cplexBound.cpp	2021-03-25 13:34:56.563080993 +0000
++++ b/cplexBound.cpp	2021-03-25 13:35:58.286839410 +0000
+@@ -2,6 +2,6 @@
+ #define INSTANCE argv[1]
+ #define DIR dirname(argv[0]) 
+ #define AWK_FILE "fileFilter.awk"
+-#define AWK_COMMAND "awk"
++#define AWK_COMMAND "/home/jcortes/atelier/bin/awk"
+ /*1:*/
+ #line 13 "cplexBound.w"
+
