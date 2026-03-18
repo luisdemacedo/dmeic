@@ -28,7 +28,7 @@
 #ifndef MaxSATFormula_h
 #define MaxSATFormula_h
 
-//max number of objective functions
+// max number of objective functions
 #define MAXDIM 50
 
 #ifdef SIMP
@@ -37,17 +37,17 @@
 #include "core/Solver.h"
 #endif
 
-#include "maxConsts.h"
 #include "FormulaPB.h"
 #include "MaxTypes.h"
+#include "maxConsts.h"
 #include <map>
-#include <string>
 #include <set>
+#include <string>
 
-using NSPACE::vec;
 using NSPACE::Lit;
 using NSPACE::lit_Undef;
 using NSPACE::mkLit;
+using NSPACE::vec;
 
 namespace openwbo {
 
@@ -77,7 +77,7 @@ public:
   Lit assumption_var; //!< Assumption variable used for retrieving the core
   vec<Lit> relaxation_vars; //!< Relaxation variables that will be added to the
                             //! soft clause
-                            
+
   void my_print(indexMap indexToName);
 };
 
@@ -90,7 +90,7 @@ public:
   ~Hard() { clause.clear(); }
 
   vec<Lit> clause; //!< Hard clause
-  
+
   void my_print(indexMap indexToName);
 };
 
@@ -102,7 +102,7 @@ public:
       : hard_weight(UINT64_MAX), problem_type(_UNWEIGHTED_), n_vars(0),
         n_soft(0), n_hard(0), n_initial_vars(0), sum_soft_weight(0),
         max_soft_weight(0) {
-//     objective_function = NULL;
+    //     objective_function = NULL;
     format = _FORMAT_MAXSAT_;
     n_objf = 0;
   }
@@ -121,8 +121,10 @@ public:
 
   MaxSATFormula *copyMaxSATFormula();
 
-  //min, lower and upper bounds, and max value.
-  int64_t  bounds[MAXDIM][4];
+  MaxSATFormula *copyPBFormula();
+
+  // min, lower and upper bounds, and max value.
+  int64_t bounds[MAXDIM][4];
   char ifname[max::name];
   /*! Add a new hard clause. */
   void addHardClause(vec<Lit> &lits);
@@ -133,9 +135,9 @@ public:
   /*! Add a new soft clause with predefined relaxation variables. */
   void addSoftClause(uint64_t weight, vec<Lit> &lits, vec<Lit> &vars);
 
-  int nVars();   // Number of variables.
-  int nSoft();   // Number of soft clauses.
-  int nHard();   // Number of hard clauses.
+  int nVars();             // Number of variables.
+  int nSoft();             // Number of soft clauses.
+  int nHard();             // Number of hard clauses.
   void newVar(int v = -1); // New variable. Set to the given value.
 
   Lit newLiteral(bool sign = false); // Make a new literal.
@@ -176,20 +178,23 @@ public:
   void addPBConstraint(PB *pb);
 
   /*! Return i-PB constraint. */
-  PB *getPBConstraint(int pos) {
-      return pb_constraints[pos]; }
+  PB *getPBConstraint(int pos) { return pb_constraints[pos]; }
 
   int newVarName(char *varName);
   int varID(char *varName);
 
   void addObjFunction(const PBObjFunction *of) {
-//     objective_function = new PBObjFunction(of->_lits, of->_coeffs, of->_const);
-    objective_functions.push(new PBObjFunction(of->_lits, of->_coeffs, of->_const,of->_factor));
+    //     objective_function = new PBObjFunction(of->_lits, of->_coeffs,
+    //     of->_const);
+    objective_functions.push(
+        new PBObjFunction(of->_lits, of->_coeffs, of->_const, of->_factor));
     n_objf++;
   }
 
-//   PBObjFunction *getObjFunction() { return objective_function; }
-  PBObjFunction *getObjFunction(int i=0) { return (n_objf > 0) ? objective_functions[i] : NULL; } //AG
+  //   PBObjFunction *getObjFunction() { return objective_function; }
+  PBObjFunction *getObjFunction(int i = 0) {
+    return (n_objf > 0) ? objective_functions[i] : NULL;
+  } // AG
 
   int nCard() { return cardinality_constraints.size(); }
 
@@ -202,16 +207,22 @@ public:
   int getFormat() { return format; }
 
   indexMap &getIndexToName() { return _indexToName; }
+  void setIndexToName(indexMap indexToName) { _indexToName = indexToName; }
   nameMap &getNameToIndex() { return _nameToIndex; } //
-  
-  //para imprimir a formula maxSAT
+  void setNameToIndex(nameMap nameToIndex) { _nameToIndex = nameToIndex; }
+
+  // para imprimir a formula maxSAT
   void my_print();
-  
-  int nObjFunctions() { return n_objf; } //AG
+
+  int nObjFunctions() { return n_objf; } // AG
   // hook to updated formula after it is loaded. In particular, it is
   // responsible for setting the fixed_vars field.
-  void sync_first(Glucose::Solver* s);  
-  const std::set<Lit>& fixed_vars(){return fv;};
+  void sync_first(Glucose::Solver *s);
+
+  void setFixedVars(const std::set<Lit> &fixed) { fv = fixed; }
+
+  const std::set<Lit> &fixed_vars() { return fv; };
+
 protected:
   // MaxSAT database
   //
@@ -220,11 +231,12 @@ protected:
 
   // PB database
   //
-//   PBObjFunction *objective_function;   //<! Objective function for PB.
-  vec<PBObjFunction *>objective_functions;  //AG  //<! Objective function for PB.
+  //   PBObjFunction *objective_function;   //<! Objective function for PB.
+  vec<PBObjFunction *>
+      objective_functions;             // AG  //<! Objective function for PB.
   vec<Card *> cardinality_constraints; //<! Stores the cardinality constraints.
   vec<PB *> pb_constraints;            //<! Stores the PB constraints.
-  int n_objf; //AG
+  int n_objf;                          // AG
 
   // Properties of the MaxSAT formula
   //
@@ -248,8 +260,6 @@ protected:
 
   // store variables that are found to be fixed from the start
   std::set<Lit> fv{};
-  
-
 };
 
 } // namespace openwbo

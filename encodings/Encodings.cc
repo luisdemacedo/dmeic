@@ -30,27 +30,24 @@
 using namespace encoding;
 
 // #define __DEBUG__
-void Encodings::my_iprintLite(Lit l){
+void Encodings::my_iprintLite(Lit l) {
 #ifdef __DEBUG__
-    printf(" ");
-    if (sign(l))
-        printf("~");
-    printf("y%d", var(l) + 1);
+  printf(" ");
+  if (sign(l))
+    printf("~");
+  printf("y%d", var(l) + 1);
 #endif
 }
 
-
-void Encodings::my_iprintClause(const vec<Lit>& clause){
+void Encodings::my_iprintClause(const vec<Lit> &clause) {
 #ifdef __DEBUG__
-    printf("clause ");
-    for(int i = 0; i < clause.size(); i++){
-        my_iprintLite(clause[i]);
-    }
-    printf("\n");
+  printf("clause ");
+  for (int i = 0; i < clause.size(); i++) {
+    my_iprintLite(clause[i]);
+  }
+  printf("\n");
 #endif
 }
-
-
 
 // Creates an unit clause in the SAT solver
 void Encodings::addUnitClause(Solver *S, Lit a, Lit blocking) {
@@ -61,7 +58,7 @@ void Encodings::addUnitClause(Solver *S, Lit a, Lit blocking) {
   if (blocking != lit_Undef)
     clause.push(blocking);
   S->addClause(clause);
-  my_iprintClause(clause); //AG
+  my_iprintClause(clause); // AG
   clause.clear();
 }
 
@@ -75,7 +72,7 @@ void Encodings::addBinaryClause(Solver *S, Lit a, Lit b, Lit blocking) {
   if (blocking != lit_Undef)
     clause.push(blocking);
   S->addClause(clause);
-  my_iprintClause(clause); //AG
+  my_iprintClause(clause); // AG
   clause.clear();
 }
 
@@ -90,7 +87,7 @@ void Encodings::addTernaryClause(Solver *S, Lit a, Lit b, Lit c, Lit blocking) {
   if (blocking != lit_Undef)
     clause.push(blocking);
   S->addClause(clause);
-  my_iprintClause(clause); //AG
+  my_iprintClause(clause); // AG
   clause.clear();
 }
 
@@ -108,6 +105,6 @@ void Encodings::addQuaternaryClause(Solver *S, Lit a, Lit b, Lit c, Lit d,
   if (blocking != lit_Undef)
     clause.push(blocking);
   S->addClause(clause);
-  my_iprintClause(clause); //AG
+  my_iprintClause(clause); // AG
   clause.clear();
 }

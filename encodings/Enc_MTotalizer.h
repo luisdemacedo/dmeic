@@ -38,7 +38,7 @@
 #include "core/SolverTypes.h"
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 class MTotalizer : public Encodings {
 
 public:
@@ -78,6 +78,6 @@ protected:
   // Stores the current value of the rhs of the cardinality constraint.
   int64_t current_cardinality_rhs;
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

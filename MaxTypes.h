@@ -34,19 +34,19 @@ namespace openwbo {
 
 #define _MAX_CLAUSES_ 3000000
 
-/** This class catches the exception that is used across the solver to indicate errors */
-class MaxSATException
-{
+/** This class catches the exception that is used across the solver to indicate
+ * errors */
+class MaxSATException {
   std::string s;
+
 public:
-  MaxSATException(const char* file, const int line, const char* msg)
-  {
+  MaxSATException(const char *file, const int line, const char *msg) {
     std::stringstream a;
     a << file << ":" << line << ":" << msg;
     s = a.str();
   }
 
-  const char* getMsg() const {return s.c_str() ;}
+  const char *getMsg() const { return s.c_str(); }
 };
 
 enum { _FORMAT_MAXSAT_ = 0, _FORMAT_PB_ };
@@ -83,6 +83,7 @@ enum {
   _ALGORITHM_MOUNSATSAT_PMINIMAL_,
   _ALGORITHM_MOUNSATSATLIST_PMINIMAL_,
   _ALGORITHM_DRILL_,
+  _ALGORITHM_PORTFOLIO_,
 };
 enum StatusCode {
   _SATISFIABLE_ = 10,
@@ -101,8 +102,15 @@ enum {
 };
 enum { _CARD_CNETWORKS_ = 0, _CARD_TOTALIZER_, _CARD_MTOTALIZER_ };
 enum { _AMO_LADDER_ = 0 };
-enum { _PB_SWC_ = 0, _PB_GTE_, _PB_ADDER_, _PB_IGTE_, _PB_KP_, _PB_KP_MINISATP_};
+enum {
+  _PB_SWC_ = 0,
+  _PB_GTE_,
+  _PB_ADDER_,
+  _PB_IGTE_,
+  _PB_KP_,
+  _PB_KP_MINISATP_
+};
 enum { _PART_SEQUENTIAL_ = 0, _PART_SEQUENTIAL_SORTED_, _PART_BINARY_ };
 
-}
+} // namespace openwbo
 #endif

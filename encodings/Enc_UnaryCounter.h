@@ -9,19 +9,19 @@
 #define MAXDIM 50
 
 namespace encoder {
-  class UnaryCounter{
-    //one RootLits instance per objective.
-    rootLits::RootLits _rootLits[MAXDIM]; 
-    //given variable index, returns corresponding value. Inverts _rootLits
-    std::map<int, int> _invRootLits;
+class UnaryCounter {
+  // one RootLits instance per objective.
+  rootLits::RootLits _rootLits[MAXDIM];
+  // given variable index, returns corresponding value. Inverts _rootLits
+  std::map<int, int> _invRootLits;
 
-  public:
-    UnaryCounter():_rootLits{}{}
-    // first pair <key, Lit> with key larger than val, for objective iObj
-    pair<uint64_t, Glucose::Lit> get(int iObj, uint64_t val);
-    //human readable string, with interpretation of Lit.
-    std::string notes(Lit);
-  };
-}
+public:
+  UnaryCounter() : _rootLits{} {}
+  // first pair <key, Lit> with key larger than val, for objective iObj
+  pair<uint64_t, Glucose::Lit> get(int iObj, uint64_t val);
+  // human readable string, with interpretation of Lit.
+  std::string notes(Lit);
+};
+} // namespace encoder
 
 #endif

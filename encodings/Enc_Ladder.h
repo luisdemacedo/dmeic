@@ -38,7 +38,7 @@
 #include "core/SolverTypes.h"
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 class Ladder : public Encodings {
 
 public:
@@ -47,6 +47,6 @@ public:
 
   void encode(Solver *S, vec<Lit> &lits);
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

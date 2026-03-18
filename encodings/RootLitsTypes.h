@@ -4,9 +4,9 @@
 #include <utility>
 #include <vector>
 
-namespace rootLits{
-  using myType = std::vector<std::pair<uint64_t, Glucose::Lit>>;
-  using value_t =std::pair<uint64_t, Glucose::Lit>; 
-}
+namespace rootLits {
+using myType = std::vector<std::pair<uint64_t, Glucose::Lit>>;
+using value_t = std::pair<uint64_t, Glucose::Lit>;
+} // namespace rootLits
 
 #endif

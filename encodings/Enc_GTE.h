@@ -35,14 +35,14 @@
 #include "core/Solver.h"
 #endif
 
+#include "../FormulaPB.h"
 #include "Encodings.h"
 #include "core/SolverTypes.h"
 #include <map>
 #include <utility>
 #include <vector>
-#include "../FormulaPB.h"
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 struct wlitt {
   Lit lit;
   uint64_t weight;
@@ -75,12 +75,12 @@ public:
   ~GTE() {}
 
   // Encode constraint.
-  void encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs, int64_t factor=1);
-  void encode(Solver *S, PBObjFunction& pb){
+  void encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs,
+              int64_t factor = 1);
+  void encode(Solver *S, PBObjFunction &pb) {
     encode(S, pb._lits, pb._coeffs, pb.ub(), pb._factor);
-  }    
-  
-  
+  }
+
   // Encode constraint.
   void encode(vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs);
 
@@ -92,14 +92,15 @@ public:
 
   // Predicts the number of auxiliary clauses for the GTE encoding
   int predict(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs);
-  
-  wlit_mapt getRootLits() { return pb_oliterals; } 
-  
-  void getEncodeSizes(int *nvar, int *nclauses, int *nrootvars){
-      *nvar = nb_variables;
-      *nclauses = nb_clauses;
-      *nrootvars = pb_oliterals.size();
-//       printf("here: %d %d %d\n", nb_variables, nb_clauses, pb_oliterals.size());
+
+  wlit_mapt getRootLits() { return pb_oliterals; }
+
+  void getEncodeSizes(int *nvar, int *nclauses, int *nrootvars) {
+    *nvar = nb_variables;
+    *nclauses = nb_clauses;
+    *nrootvars = pb_oliterals.size();
+    //       printf("here: %d %d %d\n", nb_variables, nb_clauses,
+    //       pb_oliterals.size());
   }
 
 protected:
@@ -131,9 +132,6 @@ protected:
   int nb_current_variables;
 };
 
-} // namespace openwbo
-
-
-
+} // namespace encoding
 
 #endif

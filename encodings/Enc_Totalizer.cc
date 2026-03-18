@@ -343,7 +343,8 @@ void Totalizer::build(Solver *S, vec<Lit> &lits, int64_t rhs) {
   hasEncoding = true;
 
   lits.copyTo(ilits);
-  
+
   printf("c ltotalizer nvars nclauses nvars_root\n");
-  printf("c totalizer %d %d %d\n", n_variables, n_clauses, cardinality_outlits.size());
+  printf("c totalizer %d %d %d\n", n_variables, n_clauses,
+         cardinality_outlits.size());
 }

@@ -1,5 +1,4 @@
 #include "RootLitsIterator.h"
 #include "RootLitsInt.h"
 
-namespace rootLits {
-}
+namespace rootLits {}

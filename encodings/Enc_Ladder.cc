@@ -57,7 +57,10 @@ void Ladder::encode(Solver *S, vec<Lit> &lits) {
   assert(lits.size() != 0);
 
   if (lits.size() == 1) {
-//     addUnitClause(S, lits[0]); //AG - ACHO QUE ISTO ESTA A MAIS, E UM BUG (esta funcao e usada para codificar o at-most-one (e nao o exactly-one) e quando so tem um lit, obrigava a que esse lit fosse verdadeiro)
+    //     addUnitClause(S, lits[0]); //AG - ACHO QUE ISTO ESTA A MAIS, E UM BUG
+    //     (esta funcao e usada para codificar o at-most-one (e nao o
+    //     exactly-one) e quando so tem um lit, obrigava a que esse lit fosse
+    //     verdadeiro)
   } else {
 
     vec<Lit> seq_auxiliary;

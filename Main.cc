@@ -75,6 +75,7 @@
 #include "algorithms/Alg_ConflictShuntMO.h"
 #include "algorithms/Alg_DrillMO.h"
 #include "algorithms/Alg_MaxSAT_Strat_MOCO.h"
+#include "algorithms/Alg_PortfolioMO.h"
 #include "algorithms/Alg_SlideDrillMO.h"
 #include "algorithms/Alg_SlideMO.h"
 #include "algorithms/Alg_StratAnalysisMO.h"
@@ -237,8 +238,10 @@ IntOption
               "25=mo-us-epsilon-decay, "
               "26=mo-us_pmin), "
               "27=mo-us_list_pmin), "
+              "28=drill), " // undocumented
+              "29=portfolio), "
               "\n",
-              7, IntRange(0, 28));
+              7, IntRange(0, 29));
 
 IntOption partition_strategy("PartMSU3", "partition-strategy",
                              "Partition strategy (0=sequential, "
@@ -509,7 +512,20 @@ MaxSAT *buildSolver() {
     S = new DrillMO(verbosity, weight, partition_strategy, cardinality, pb,
                     pbobjf);
     break;
-
+  case _ALGORITHM_PORTFOLIO_: {
+    std::vector<openwbo::PBtoCNF *> workers = {};
+    workers.push_back(new UnsatSatMO(verbosity, weight, partition_strategy,
+                                     cardinality, pb, pbobjf));
+    workers.push_back(new PMinimalMO(verbosity, weight, partition_strategy,
+                                     cardinality, pb, pbobjf));
+    workers.push_back(new HittingSetsMO(verbosity, weight, partition_strategy,
+                                        cardinality, pb, pbobjf));
+    workers.push_back(new SlideDrillMO(verbosity, weight, partition_strategy,
+                                       cardinality, pb, pbobjf));
+    S = new PortfolioMO(verbosity, weight, partition_strategy, cardinality, pb,
+                        pbobjf, workers);
+    break;
+  }
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");
     printf("s UNKNOWN\n");

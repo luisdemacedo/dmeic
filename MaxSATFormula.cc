@@ -50,8 +50,39 @@ MaxSATFormula *MaxSATFormula::copyMaxSATFormula() {
   copymx->updateSumWeights(getSumWeights());
   copymx->setMaximumWeight(getMaximumWeight());
   copymx->setHardWeight(getHardWeight());
+  copymx->setFixedVars(fixed_vars());
 
   return copymx;
+}
+
+MaxSATFormula *MaxSATFormula::copyPBFormula() {
+  assert(format == _FORMAT_PB_);
+
+  setFormat(_FORMAT_MAXSAT_);
+  MaxSATFormula *copypb = copyMaxSATFormula();
+  setFormat(_FORMAT_PB_);
+
+  for (int i = 0; i < nPB(); i++)
+    copypb->addPBConstraint(getPBConstraint(i));
+
+  for (int i = 0; i < nCard(); i++)
+    copypb->addCardinalityConstraint(getCardinalityConstraint(i));
+
+  for (int i = 0; i < nObjFunctions(); i++)
+    copypb->addObjFunction(getObjFunction(i));
+
+  copypb->setFormat(_FORMAT_PB_);
+  copypb->setProblemType(getProblemType());
+
+  copypb->setIndexToName(getIndexToName());
+  copypb->setNameToIndex(getNameToIndex());
+
+  memcpy(copypb->bounds, bounds, sizeof(int64_t) * 4 * MAXDIM);
+
+  strncpy(copypb->ifname, ifname, max::name);
+  copypb->ifname[max::name - 1] = '\0'; // ensure null-termination
+
+  return copypb;
 }
 
 // Adds a new hard clause to the hard clause database.
@@ -109,8 +140,10 @@ int MaxSATFormula::nHard() {
 } // Returns the number of hard clauses in the working MaxSAT formula.
 
 void MaxSATFormula::newVar(int v) {
-  if(v == -1) n_vars++;
-  else if(v > n_vars) n_vars = v;
+  if (v == -1)
+    n_vars++;
+  else if (v > n_vars)
+    n_vars = v;
 } // Increases the number of variables in the working MaxSAT formula.
 
 // Makes a new literal to be used in the working MaxSAT formula.
@@ -155,6 +188,10 @@ Soft &MaxSATFormula::getSoftClause(int pos) {
 Hard &MaxSATFormula::getHardClause(int pos) {
   assert(pos < nHard());
   return hard_clauses[pos];
+}
+
+void MaxSATFormula::addCardinalityConstraint(Card *card) {
+  cardinality_constraints.push(card);
 }
 
 void MaxSATFormula::addPBConstraint(PB *p) {
@@ -202,138 +239,134 @@ int MaxSATFormula::varID(char *varName) {
 }
 
 void MaxSATFormula::convertPBtoMaxSAT() {
-// void MaxSATFormula::convertPBtoMaxSAT(Solver * S = NULL) { //AG
-    
-//   printf("MaxSATFormula::convertPBtoMaxSAT n_objf: %d\n", n_objf);
+  // void MaxSATFormula::convertPBtoMaxSAT(Solver * S = NULL) { //AG
+
+  //   printf("MaxSATFormula::convertPBtoMaxSAT n_objf: %d\n", n_objf);
   assert(objective_functions != NULL);
   vec<Lit> unit_soft(1);
 
-  if(n_objf == 1){
+  if (n_objf == 1) {
     // Convert objective function to soft clauses
     for (int i = 0; i < objective_functions[0]->_lits.size(); i++) {
-        assert(objective_functions[0]->_coeffs[i] > 0);
-        unit_soft[0] = ~objective_functions[0]->_lits[i];
-        addSoftClause(objective_functions[0]->_coeffs[i], unit_soft);
+      assert(objective_functions[0]->_coeffs[i] > 0);
+      unit_soft[0] = ~objective_functions[0]->_lits[i];
+      addSoftClause(objective_functions[0]->_coeffs[i], unit_soft);
 
-        // Updates the maximum weight of soft clauses.
-        setMaximumWeight(objective_functions[0]->_coeffs[i]);
-        // Updates the sum of the weights of soft clauses.
-        updateSumWeights(objective_functions[0]->_coeffs[i]);
+      // Updates the maximum weight of soft clauses.
+      setMaximumWeight(objective_functions[0]->_coeffs[i]);
+      // Updates the sum of the weights of soft clauses.
+      updateSumWeights(objective_functions[0]->_coeffs[i]);
     }
-  }else{ //AG - n_objf > 1 (Multiobjective case)
-      //TODO: converter fobj para GTE
-      // objective_function->_lits[i] ou ~objective_function->_lits[i]?
-    for(int j = 0; j < n_objf; j++){
+  } else { // AG - n_objf > 1 (Multiobjective case)
+    // TODO: converter fobj para GTE
+    //  objective_function->_lits[i] ou ~objective_function->_lits[i]?
+    for (int j = 0; j < n_objf; j++) {
       int totalw = 0;
-      for (int i = 0; i < objective_functions[j]->_coeffs.size(); i++){
-	totalw += objective_functions[j]->_coeffs[i];
+      for (int i = 0; i < objective_functions[j]->_coeffs.size(); i++) {
+        totalw += objective_functions[j]->_coeffs[i];
       };
-            
-      //TODO: Fazer versao standalone to GTE (recebe pbc e devolve conjunto de clausulas e literais
-      //             na raiz)
-      //         encode(this, objective_functions[j]->_lits, objective_functions[j]->_coeffs, totalw);
-    }
-      //      obter os literais do no raiz, R
 
-      //      usar o order encoding nos literais de R (adicionar hard clauses)
-      
-      //      adicionar os literais em R como soft clauses
-      
+      // TODO: Fazer versao standalone to GTE (recebe pbc e devolve conjunto de
+      // clausulas e literais
+      //              na raiz)
+      //          encode(this, objective_functions[j]->_lits,
+      //          objective_functions[j]->_coeffs, totalw);
+    }
+    //      obter os literais do no raiz, R
+
+    //      usar o order encoding nos literais de R (adicionar hard clauses)
+
+    //      adicionar os literais em R como soft clauses
   }
-  
-  
+
   if (getMaximumWeight() == 1)
     setProblemType(_UNWEIGHTED_);
   else
     setProblemType(_WEIGHTED_);
-  
-  
-  //AG
-//   printf("MaxSATFormula::convertPBtoMaxSAT -- formula after conversion\n");
-//   my_print();
-  
+
+  // AG
+  //   printf("MaxSATFormula::convertPBtoMaxSAT -- formula after conversion\n");
+  //   my_print();
 }
 
-
-void Hard:: my_print(indexMap indexToName){   
-    printf("c\t");
-    for(int i = 0; i < clause.size(); i++)
-//         printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
-        if(indexToName.find(var(clause[i])) != indexToName.end())
-            printf(" %s%s", ((sign(clause[i])) ? "~" : ""), indexToName.at(var(clause[i])).c_str());
-        else
-            printf(" %s%s", ((sign(clause[i])) ? "~" : ""), "X");
-    printf("\n");
+void Hard::my_print(indexMap indexToName) {
+  printf("c\t");
+  for (int i = 0; i < clause.size(); i++)
+    //         printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
+    if (indexToName.find(var(clause[i])) != indexToName.end())
+      printf(" %s%s", ((sign(clause[i])) ? "~" : ""),
+             indexToName.at(var(clause[i])).c_str());
+    else
+      printf(" %s%s", ((sign(clause[i])) ? "~" : ""), "X");
+  printf("\n");
 }
 
-void Soft:: my_print(indexMap indexToName){   
-    printf("c\t");
-    for(int i = 0; i < clause.size(); i++)
-//         printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
-        
-        if(indexToName.find(var(clause[i])) != indexToName.end())
-            printf(" %lu %s%s", weight, ((sign(clause[i])) ? "~" : ""), indexToName.at(var(clause[i])).c_str());
-        else
-            printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
-    printf(" [");
-    for(int i = 0; i < relaxation_vars.size(); i++)
-        printf(" %s%d", ((sign(relaxation_vars[i])) ? "~" : ""), var(relaxation_vars[i]));
-    printf("]");
-    printf(" A(%d)\n", var(assumption_var));
+void Soft::my_print(indexMap indexToName) {
+  printf("c\t");
+  for (int i = 0; i < clause.size(); i++)
+    //         printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
+
+    if (indexToName.find(var(clause[i])) != indexToName.end())
+      printf(" %lu %s%s", weight, ((sign(clause[i])) ? "~" : ""),
+             indexToName.at(var(clause[i])).c_str());
+    else
+      printf(" %s%d", ((sign(clause[i])) ? "~" : ""), var(clause[i]));
+  printf(" [");
+  for (int i = 0; i < relaxation_vars.size(); i++)
+    printf(" %s%d", ((sign(relaxation_vars[i])) ? "~" : ""),
+           var(relaxation_vars[i]));
+  printf("]");
+  printf(" A(%d)\n", var(assumption_var));
 }
 
+void MaxSATFormula::my_print() {
+  printf("c -----------------------------------\n");
+  printf("c --------- index to var ------------\n");
+  //     int k;
+  //     string v;
+  /*
+  for (auto const& pair: _indexToName) {
+      std::cout << "c\t{" << pair.first+1 << ": " << pair.second << "}\n";
+  }*/
 
+  //     int maxsize = 20;
+  int maxcs = 10; // 100
+  printf("c ------- Objective Func (%d) -----------------\n", n_objf);
+  for (int di = 0; di < n_objf; di++)
+    objective_functions[di]->my_print(_indexToName);
 
-void MaxSATFormula::my_print(){
-    printf("c -----------------------------------\n");
-    printf("c --------- index to var ------------\n");
-//     int k;
-//     string v;
-    /*
-    for (auto const& pair: _indexToName) {
-        std::cout << "c\t{" << pair.first+1 << ": " << pair.second << "}\n";
-    }*/
-    
-//     int maxsize = 20;
-    int maxcs = 10; //100
-    printf("c ------- Objective Func (%d) -----------------\n", n_objf);
-    for(int di = 0; di < n_objf; di++)
-        objective_functions[di]->my_print(_indexToName);
-    
-    printf("c ------- PB Constraints (%d) ------------\n", pb_constraints.size());
-    for(int i = 0; i < pb_constraints.size(); i++){
-        pb_constraints[i]->my_print(_indexToName);
-    }
-    
-    printf("c ------- Cardinality Constr (%d) --------\n", cardinality_constraints.size());
-    if(cardinality_constraints.size() < maxcs){
-        for(int i = 0; i < cardinality_constraints.size(); i++){
-            cardinality_constraints[i]->my_print(_indexToName);
-        }
-    }
+  printf("c ------- PB Constraints (%d) ------------\n", pb_constraints.size());
+  for (int i = 0; i < pb_constraints.size(); i++) {
+    pb_constraints[i]->my_print(_indexToName);
+  }
 
-    printf("c ---------------------------------------\n");
-    printf("c ------- Hard clauses (%d) --------------\n", hard_clauses.size());
-    if(hard_clauses.size() < maxcs){
-        for(int i = 0; i < hard_clauses.size(); i++){
-            hard_clauses[i].my_print(_indexToName);
-        }
+  printf("c ------- Cardinality Constr (%d) --------\n",
+         cardinality_constraints.size());
+  if (cardinality_constraints.size() < maxcs) {
+    for (int i = 0; i < cardinality_constraints.size(); i++) {
+      cardinality_constraints[i]->my_print(_indexToName);
     }
-    printf("c ------- Soft clauses (%d) --------------\n", soft_clauses.size());
-    if(soft_clauses.size() < maxcs){
-        for(int i = 0; i < soft_clauses.size(); i++){
-            soft_clauses[i].my_print(_indexToName);
-        }
+  }
+
+  printf("c ---------------------------------------\n");
+  printf("c ------- Hard clauses (%d) --------------\n", hard_clauses.size());
+  if (hard_clauses.size() < maxcs) {
+    for (int i = 0; i < hard_clauses.size(); i++) {
+      hard_clauses[i].my_print(_indexToName);
     }
-    
-    
-    
-    printf("c ---------------------------------------\n");
-    
+  }
+  printf("c ------- Soft clauses (%d) --------------\n", soft_clauses.size());
+  if (soft_clauses.size() < maxcs) {
+    for (int i = 0; i < soft_clauses.size(); i++) {
+      soft_clauses[i].my_print(_indexToName);
+    }
+  }
+
+  printf("c ---------------------------------------\n");
 }
 
-void MaxSATFormula::sync_first(Glucose::Solver *s){
-  for(int i = 0; i < nInitialVars(); i++)
-    if(s->value(i) != l_Undef)
-      fv.insert(mkLit(i,true));
+void MaxSATFormula::sync_first(Glucose::Solver *s) {
+  for (int i = 0; i < nInitialVars(); i++)
+    if (s->value(i) != l_Undef)
+      fv.insert(mkLit(i, true));
 }

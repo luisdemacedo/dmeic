@@ -32,7 +32,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "core/SolverTypes.h"
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 class CNetworks : public Encodings {
 
 public:
@@ -61,6 +61,6 @@ protected:
   // for incremental solving.
   vec<Lit> cardinality_outlits;
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

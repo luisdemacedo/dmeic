@@ -38,7 +38,7 @@
 #include "core/SolverTypes.h"
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 class Totalizer : public Encodings {
 
 public:
@@ -130,6 +130,6 @@ protected:
   int n_clauses;
   int n_variables;
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

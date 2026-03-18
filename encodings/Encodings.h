@@ -37,15 +37,15 @@
 #include "../MaxTypes.h"
 #include "core/SolverTypes.h"
 
-using NSPACE::vec;
 using NSPACE::Lit;
-using NSPACE::mkLit;
 using NSPACE::lit_Error;
 using NSPACE::lit_Undef;
+using NSPACE::mkLit;
 using NSPACE::Solver;
+using NSPACE::vec;
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 //=================================================================================================
 class Encodings {
 
@@ -78,10 +78,10 @@ public:
 protected:
   vec<Lit> clause; // Temporary clause to be used while building the encodings.
   bool hasEncoding;
-  
+
   void my_iprintLite(Lit l);
-  void my_iprintClause(const vec<Lit>& clause);
+  void my_iprintClause(const vec<Lit> &clause);
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

@@ -32,48 +32,40 @@
 
 // #define __DEBUG__
 #ifdef __DEBUG__
-    #define    DPRINTF(f,...)    fprintf(stderr,f,##__VA_ARGS__)
+#define DPRINTF(f, ...) fprintf(stderr, f, ##__VA_ARGS__)
 #else
-    #define    DPRINTF(f,...)
+#define DPRINTF(f, ...)
 #endif
 
-
-
-
-void my_printPB( vec<Lit> &lits, vec<uint64_t> &coeffs,
-                 uint64_t rhs){
+void my_printPB(vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs) {
 #ifdef __DEBUG__
-    for (int i = 0; i < coeffs.size(); i++) {
-        printf("%d ", (int)coeffs[i]);
-        if (sign(lits[i]))
-            printf("~");
-        printf("y%d ", var(lits[i]) + 1);
-    }
-    printf("<= %lu\n", rhs);
+  for (int i = 0; i < coeffs.size(); i++) {
+    printf("%d ", (int)coeffs[i]);
+    if (sign(lits[i]))
+      printf("~");
+    printf("y%d ", var(lits[i]) + 1);
+  }
+  printf("<= %lu\n", rhs);
 #endif
 }
 
-void my_printLit(Lit l){
+void my_printLit(Lit l) {
 #ifdef __DEBUG__
-    printf(" ");
-    if (sign(l))
-        printf("~");
-    printf("y%d", var(l) + 1);
+  printf(" ");
+  if (sign(l))
+    printf("~");
+  printf("y%d", var(l) + 1);
 #endif
 }
 
-
-void my_printLitNL(Lit l){
+void my_printLitNL(Lit l) {
 #ifdef __DEBUG__
-    my_printLit(l);
-    printf("\n");
+  my_printLit(l);
+  printf("\n");
 #endif
 }
 
 using namespace encoding;
-
-
-
 
 struct less_than_wlitt {
   inline bool operator()(const wlitt &wl1, const wlitt &wl2) {
@@ -100,7 +92,7 @@ Lit GTE::get_var(Solver *S, wlit_mapt &oliterals, uint64_t weight) {
 bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
                     wlit_mapt &oliterals) {
 
-  if (iliterals.size() == 0 || k == 0){
+  if (iliterals.size() == 0 || k == 0) {
     return false;
   }
 
@@ -130,8 +122,10 @@ bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
   init_wlit.lit = lit_Undef;
   init_wlit.weight=0;*/
   wlit_sumt wlit_sum;
-  uint64_t lk = std::accumulate(linputs.begin(), linputs.end(), uint64_t(0), wlit_sum);
-  uint64_t rk = std::accumulate(rinputs.begin(), rinputs.end(), uint64_t(0), wlit_sum);
+  uint64_t lk =
+      std::accumulate(linputs.begin(), linputs.end(), uint64_t(0), wlit_sum);
+  uint64_t rk =
+      std::accumulate(rinputs.begin(), rinputs.end(), uint64_t(0), wlit_sum);
 
   lk = k >= lk ? lk : k;
   rk = k >= rk ? rk : k;
@@ -150,13 +144,15 @@ bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
          mit++) {
 
       if (mit->first > k) {
-          
-        DPRINTF("\tc b1:\t"); my_printLit(~mit->second);
+
+        DPRINTF("\tc b1:\t");
+        my_printLit(~mit->second);
         my_printLitNL(get_var(S, oliterals, k));
         addBinaryClause(S, ~mit->second, get_var(S, oliterals, k));
         nb_clauses++;
       } else {
-        DPRINTF("\tc b2:\t"); my_printLit(~mit->second);
+        DPRINTF("\tc b2:\t");
+        my_printLit(~mit->second);
         my_printLitNL(get_var(S, oliterals, mit->first));
         addBinaryClause(S, ~mit->second, get_var(S, oliterals, mit->first));
         nb_clauses++;
@@ -173,13 +169,15 @@ bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
          mit++) {
 
       if (mit->first > k) {
-        DPRINTF("\tc b3:\t"); my_printLit(~mit->second);
+        DPRINTF("\tc b3:\t");
+        my_printLit(~mit->second);
         my_printLitNL(get_var(S, oliterals, k));
         addBinaryClause(S, ~mit->second, get_var(S, oliterals, k));
         nb_clauses++;
         // clause.push_back(get_var(auxvars,oliterals,k));
       } else {
-        DPRINTF("\tc b4:\t"); my_printLit(~mit->second);
+        DPRINTF("\tc b4:\t");
+        my_printLit(~mit->second);
         my_printLitNL(get_var(S, oliterals, mit->first));
         addBinaryClause(S, ~mit->second, get_var(S, oliterals, mit->first));
         nb_clauses++;
@@ -201,20 +199,22 @@ bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
         clause.push_back(-r.second);*/
         uint64_t tw = lit->first + rit->first;
         if (tw > k) {
-            
-          DPRINTF("\tc t1:\t"); my_printLit(~lit->second);
+
+          DPRINTF("\tc t1:\t");
+          my_printLit(~lit->second);
           my_printLit(~rit->second);
           my_printLitNL(get_var(S, oliterals, k));
-      
+
           addTernaryClause(S, ~lit->second, ~rit->second,
                            get_var(S, oliterals, k));
           nb_clauses++;
           // clause.push_back(get_var(auxvars,oliterals,k));
         } else {
-          DPRINTF("\tc t2:\t"); my_printLit(~lit->second);
+          DPRINTF("\tc t2:\t");
+          my_printLit(~lit->second);
           my_printLit(~rit->second);
           my_printLitNL(get_var(S, oliterals, tw));
-          
+
           addTernaryClause(S, ~lit->second, ~rit->second,
                            get_var(S, oliterals, tw));
           nb_clauses++;
@@ -229,10 +229,8 @@ bool GTE::encodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
   return true;
 }
 
-
-
-void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
-                 uint64_t rhs, int64_t factor) {
+void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs, uint64_t rhs,
+                 int64_t factor) {
   // FIXME: do not change coeffs in this method. Make coeffs const.
 
   // If the rhs is larger than INT32_MAX is not feasible to encode this
@@ -242,10 +240,10 @@ void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
     DPRINTF("s UNKNOWN\n");
     exit(_ERROR_);
   }
-  
+
   DPRINTF("c [Enc_GTE: encode()]\n");
-//   DPRINTF("c pb:");
-//   my_printPB(lits, coeffs, rhs);
+  //   DPRINTF("c pb:");
+  //   my_printPB(lits, coeffs, rhs);
 
   hasEncoding = false;
   nb_variables = 0;
@@ -273,19 +271,20 @@ void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
     if (simp_coeffs[i] <= (unsigned)rhs) {
       lits.push(simp_lits[i]);
       coeffs.push(simp_coeffs[i]);
-    } else{
-        DPRINTF("\tc u1:\t"); my_printLitNL(~simp_lits[i]);
+    } else {
+      DPRINTF("\tc u1:\t");
+      my_printLitNL(~simp_lits[i]);
       addUnitClause(S, ~simp_lits[i]);
     }
   }
 
   if (lits.size() == 1) {
-        DPRINTF("\tc e1: size 1\n");
+    DPRINTF("\tc e1: size 1\n");
     // addUnitClause(S, ~lits[0]);
     return;
   }
 
-  if (lits.size() == 0){
+  if (lits.size() == 0) {
     DPRINTF("\tc e0: size 0");
     return;
   }
@@ -304,7 +303,8 @@ void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
   for (wlit_mapt::reverse_iterator rit = pb_oliterals.rbegin();
        rit != pb_oliterals.rend(); rit++) {
     if (rit->first > rhs) {
-      DPRINTF("\tc u2:\t"); my_printLitNL(~rit->second);
+      DPRINTF("\tc u2:\t");
+      my_printLitNL(~rit->second);
       addUnitClause(S, ~rit->second);
     } else {
       break;
@@ -329,10 +329,9 @@ void GTE::encode(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
 
   current_pb_rhs = rhs;
   hasEncoding = true;
-  printf("c lgte nvars nclauses nvars_root\n"); 
+  printf("c lgte nvars nclauses nvars_root\n");
   printf("c gte\t%d\t%d\t%lu\n", nb_variables, nb_clauses, pb_oliterals.size());
 
-  
   DPRINTF("\tc ncs, nvs:\t%d\t%d\n", nb_clauses, nb_variables);
   fflush(stdout);
 }
@@ -345,7 +344,9 @@ void GTE::update(Solver *S, uint64_t rhs) {
     if (rit->first > current_pb_rhs)
       continue;
     if (rit->first > rhs) {
-        DPRINTF("\tc turn off1 "); my_printLitNL(~rit->second); DPRINTF("[%d]\n", rit->first);
+      DPRINTF("\tc turn off1 ");
+      my_printLitNL(~rit->second);
+      DPRINTF("[%d]\n", rit->first);
       addUnitClause(S, ~rit->second);
     } else {
       break;
@@ -369,9 +370,9 @@ Lit GTE::get_var_predict(Solver *S, wlit_mapt &oliterals, uint64_t weight) {
   return oliterals[weight];
 }
 
-bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals,
-                    wlit_mapt &oliterals) {
-
+bool GTE::predictEncodeLeq(uint64_t k, Solver *S,
+                           const weightedlitst &iliterals,
+                           wlit_mapt &oliterals) {
 
   if (nb_clauses_expected >= _MAX_CLAUSES_)
     return false;
@@ -380,7 +381,7 @@ bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals
     return false;
 
   if (iliterals.size() == 1) {
-    
+
     oliterals.insert(
         wlit_pairt(iliterals.front().weight, iliterals.front().lit));
     return true;
@@ -400,8 +401,10 @@ bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals
   rinputs.insert(rinputs.begin(), myit1, myit2);
 
   wlit_sumt wlit_sum;
-  uint64_t lk = std::accumulate(linputs.begin(), linputs.end(), uint64_t(0), wlit_sum);
-  uint64_t rk = std::accumulate(rinputs.begin(), rinputs.end(), uint64_t(0), wlit_sum);
+  uint64_t lk =
+      std::accumulate(linputs.begin(), linputs.end(), uint64_t(0), wlit_sum);
+  uint64_t rk =
+      std::accumulate(rinputs.begin(), rinputs.end(), uint64_t(0), wlit_sum);
 
   lk = k >= lk ? lk : k;
   rk = k >= rk ? rk : k;
@@ -428,7 +431,6 @@ bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals
         if (nb_clauses_expected >= _MAX_CLAUSES_)
           return false;
       }
-
     }
   }
 
@@ -447,7 +449,6 @@ bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals
         if (nb_clauses_expected >= _MAX_CLAUSES_)
           return false;
       }
-
     }
   }
 
@@ -468,7 +469,6 @@ bool GTE::predictEncodeLeq(uint64_t k, Solver *S, const weightedlitst &iliterals
           if (nb_clauses_expected >= _MAX_CLAUSES_)
             return false;
         }
-
       }
     }
   }
@@ -505,7 +505,7 @@ int GTE::predict(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
 
   if (lits.size() <= 1)
     return nb_clauses_expected;
-  
+
   weightedlitst iliterals;
   for (int i = 0; i < lits.size(); i++) {
     wlitt wl;
@@ -518,5 +518,4 @@ int GTE::predict(Solver *S, vec<Lit> &lits, vec<uint64_t> &coeffs,
   wlit_mapt oliterals;
   predictEncodeLeq(rhs + 1, S, iliterals, oliterals);
   return nb_clauses_expected;
-
 }

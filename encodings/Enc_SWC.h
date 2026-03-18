@@ -38,7 +38,7 @@
 #include "core/SolverTypes.h"
 
 namespace encoding {
-  using namespace openwbo;
+using namespace openwbo;
 class SWC : public Encodings {
 
 public:
@@ -98,6 +98,6 @@ protected:
   int nb_variables;
   int nb_clauses;
 };
-} // namespace openwbo
+} // namespace encoding
 
 #endif

@@ -31,7 +31,6 @@
 
 using namespace openwbo;
 
-
 /************************************************************************************************
  //
  // Public methods
@@ -39,7 +38,8 @@ using namespace openwbo;
  ************************************************************************************************/
 
 StatusCode MaxSAT::search() {
-  if(print) printf("Error: Invalid MaxSAT algoritm.\n");
+  if (print)
+    printf("Error: Invalid MaxSAT algoritm.\n");
   throw MaxSATException(__FILE__, __LINE__, "Did not implement MaxSAT search");
   return _ERROR_;
 }
@@ -92,10 +92,10 @@ void MaxSAT::reserveSATVariables(Solver *S, unsigned maxVariable) {
 // assumptions and with the option to use preprocessing for 'simp'.
 lbool MaxSAT::searchSATSolver(Solver *S, vec<Lit> &assumptions, bool pre) {
 
-// Currently preprocessing is disabled by default.
-// Variable elimination cannot be done on relaxation variables nor on variables
-// that belong to soft clauses. To preprocessing to be used those variables
-// should be frozen.
+  // Currently preprocessing is disabled by default.
+  // Variable elimination cannot be done on relaxation variables nor on
+  // variables that belong to soft clauses. To preprocessing to be used those
+  // variables should be frozen.
 
 #ifdef SIMP
   lbool res = ((NSPACE::SimpSolver *)S)->solveLimited(assumptions, pre);
@@ -288,7 +288,7 @@ void MaxSAT::print_PB_configuration(int encoding) {
            "GTE");
     break;
 
-      case _PB_IGTE_:
+  case _PB_IGTE_:
     printf("c |  PB Encoding:         %13s                        "
            "                                           |\n",
            "IGTE");
@@ -351,16 +351,16 @@ void MaxSAT::blockModel(Solver *solver) {
   solver->addClause(blocking);
 }
 
-void MaxSAT::printBound(int64_t bound)
-{
-  if(!print) return;
+void MaxSAT::printBound(int64_t bound) {
+  if (!print)
+    return;
 
   printf("o %" PRId64 "\n", bound);
 }
 
 // Prints the best satisfying model. Assumes that 'model' is not empty.
 void MaxSAT::printModel() {
-    
+
   assert(model.size() != 0);
 
   std::stringstream s;
@@ -378,50 +378,46 @@ void MaxSAT::printModel() {
   } else {
     for (int i = 0; i < model.size(); i++) {
       if (model[i] == l_True)
-        s << i+1 << " ";
+        s << i + 1 << " ";
       else
-        s << -(i+1) << " ";
+        s << -(i + 1) << " ";
     }
   }
 
   printf("%s\n", s.str().c_str());
 }
 
-
-std::string MaxSAT::printSoftClause(int id){
-  assert (maxsat_formula->getFormat() == _FORMAT_MAXSAT_);
-  assert (id < maxsat_formula->nSoft());
+std::string MaxSAT::printSoftClause(int id) {
+  assert(maxsat_formula->getFormat() == _FORMAT_MAXSAT_);
+  assert(id < maxsat_formula->nSoft());
 
   std::stringstream ss;
   ss << maxsat_formula->getSoftClause(id).weight << " ";
 
-  for (int j = 0; j < maxsat_formula->getSoftClause(id).clause.size(); j++){
+  for (int j = 0; j < maxsat_formula->getSoftClause(id).clause.size(); j++) {
     if (sign(maxsat_formula->getSoftClause(id).clause[j]))
       ss << "-";
-    ss << (var(maxsat_formula->getSoftClause(id).clause[j])+1) << " ";
+    ss << (var(maxsat_formula->getSoftClause(id).clause[j]) + 1) << " ";
   }
   ss << "0\n";
   return ss.str();
 }
 
 void MaxSAT::printUnsatisfiedSoftClauses() {
-  assert (model.size() != 0);
+  assert(model.size() != 0);
 
   std::stringstream s;
   int soft_size = 0;
-  
+
   for (int i = 0; i < maxsat_formula->nSoft(); i++) {
     bool unsatisfied = true;
     for (int j = 0; j < maxsat_formula->getSoftClause(i).clause.size(); j++) {
 
-      assert(var(maxsat_formula->getSoftClause(i).clause[j]) <
-             model.size());
+      assert(var(maxsat_formula->getSoftClause(i).clause[j]) < model.size());
       if ((sign(maxsat_formula->getSoftClause(i).clause[j]) &&
-           model[var(maxsat_formula->getSoftClause(i).clause[j])] ==
-               l_False) ||
+           model[var(maxsat_formula->getSoftClause(i).clause[j])] == l_False) ||
           (!sign(maxsat_formula->getSoftClause(i).clause[j]) &&
-           model[var(maxsat_formula->getSoftClause(i).clause[j])] ==
-               l_True)) {
+           model[var(maxsat_formula->getSoftClause(i).clause[j])] == l_True)) {
         unsatisfied = false;
         break;
       }
@@ -432,9 +428,9 @@ void MaxSAT::printUnsatisfiedSoftClauses() {
       soft_size++;
     }
   }
-  FILE * file = fopen (getPrintSoftFilename(),"w");
-  fprintf(file,"p cnf %d %d\n",maxsat_formula->nInitialVars(),soft_size);
-  fprintf(file,"%s", s.str().c_str());
+  FILE *file = fopen(getPrintSoftFilename(), "w");
+  fprintf(file, "p cnf %d %d\n", maxsat_formula->nInitialVars(), soft_size);
+  fprintf(file, "%s", s.str().c_str());
 }
 
 // Prints search statistics.
@@ -455,7 +451,8 @@ void MaxSAT::printStats() {
   printf("c  Average core size:      %12.2f\n", avgCoreSize);
   printf("c  Nb symmetry clauses:    %12d\n", nbSymmetryClauses);
   printf("c lfinal satcalls usatcalls best totaltime\n");
-  printf("c final\t%d\t%d\t%lu\t%12.2f\n", nbSatisfiable, nbCores, ubCost, totalTime - initialTime);
+  printf("c final\t%d\t%d\t%lu\t%12.2f\n", nbSatisfiable, nbCores, ubCost,
+         totalTime - initialTime);
 
   printf("c\n");
 }
@@ -471,7 +468,8 @@ void MaxSAT::printAnswer(int type) {
 
   // store type in member variable
   searchStatus = (StatusCode)type;
-  if(!print) return;
+  if (!print)
+    return;
 
   switch (type) {
   case _SATISFIABLE_:
@@ -500,7 +498,7 @@ void MaxSAT::printAnswer(int type) {
   case _UNKNOWN_:
     printf("s UNKNOWN\n");
     break;
-    
+
   case _MEMOUT_:
     printf("s MEMOUT\n");
     fflush(stdout);
@@ -508,7 +506,8 @@ void MaxSAT::printAnswer(int type) {
   default:
     printf("c Error: Invalid answer type.\n");
   }
-  exit(0); //AG - adicionei depois usar o setrlimit para ignorar o tempo de encoding (em Alg_BLS.cc)
+  //  exit(0); //AG - adicionei depois usar o setrlimit para ignorar o tempo de
+  //  encoding (em Alg_BLS.cc)
 }
 
 uint64_t MaxSAT::getUB() {
@@ -634,23 +633,27 @@ std::pair<uint64_t, int> MaxSAT::getLB() {
   return std::make_pair(lb, nb_relaxed);
 }
 
-const YPoint& Solution::OneSolution::yPoint() {
-  if(ev){
-    if(s == nullptr) throw std::runtime_error("trying to get yPoint from OneSolution, without acess to objectives: missing Solution");
-    if(s->maxs == nullptr) throw std::runtime_error("trying to get yPoint from OneSolution, without acess to objectives: missing MaxSAT");
+const YPoint &Solution::OneSolution::yPoint() {
+  if (ev) {
+    if (s == nullptr)
+      throw std::runtime_error("trying to get yPoint from OneSolution, without "
+                               "acess to objectives: missing Solution");
+    if (s->maxs == nullptr)
+      throw std::runtime_error("trying to get yPoint from OneSolution, without "
+                               "acess to objectives: missing MaxSAT");
     yp = s->maxs->evalModel(m);
     ev = false;
   }
   return yp;
 }
 
-void MaxSAT::updateStats(){}
+void MaxSAT::updateStats() {}
 
-void openwbo::blockModel(Solver* sol, Model& mod){
+void openwbo::blockModel(Solver *sol, Model &mod) {
   vec<Lit> clause;
   int i = 0;
-  for(auto& at: mod){
-    bool sign = at == l_True? true : false;
+  for (auto &at : mod) {
+    bool sign = at == l_True ? true : false;
     Lit lit = mkLit(i, sign);
     clause.push(lit);
     ++i;
@@ -658,34 +661,35 @@ void openwbo::blockModel(Solver* sol, Model& mod){
   sol->addClause(clause);
 }
 
-void openwbo::modelClause(Model&& mod, vec<Lit>& clause){
+void openwbo::modelClause(Model &&mod, vec<Lit> &clause) {
   int i = 0;
   clause.clear();
-  for(auto& at: mod){
-    bool sign = at == l_True? false : true;
+  for (auto &at : mod) {
+    bool sign = at == l_True ? false : true;
     Lit lit = mkLit(i, sign);
     clause.push(lit);
     ++i;
   }
 }
-void openwbo::modelClause(Model&& mod, vec<Lit>& clause, const vector<bool>& filter){
+void openwbo::modelClause(Model &&mod, vec<Lit> &clause,
+                          const vector<bool> &filter) {
   clause.clear();
-  for(int i = 0; i < (int) mod.size(); i++){
-    auto& at = mod[i];
-    bool sign = at == l_True? false : true;
-    if(filter[i]){
+  for (int i = 0; i < (int)mod.size(); i++) {
+    auto &at = mod[i];
+    bool sign = at == l_True ? false : true;
+    if (filter[i]) {
       Lit lit = mkLit(i, sign);
       clause.push(lit);
     }
   }
 }
 
-void openwbo::modelClausePlus(Model&& mod, vec<Lit>& clause){
+void openwbo::modelClausePlus(Model &&mod, vec<Lit> &clause) {
   int i = 0;
   clause.clear();
-  for(auto& at: mod){
-    bool sign = at == l_True? false : true;
-    if(!sign)
+  for (auto &at : mod) {
+    bool sign = at == l_True ? false : true;
+    if (!sign)
       continue;
     Lit lit = mkLit(i, sign);
     clause.push(lit);
@@ -693,46 +697,53 @@ void openwbo::modelClausePlus(Model&& mod, vec<Lit>& clause){
   }
 }
 // extends mod, by attributing l_False to tail.
-Model openwbo::modelEmbed(const Model& mod, unsigned int nVars){
+Model openwbo::modelEmbed(const Model &mod, unsigned int nVars) {
   auto size = mod.size();
   auto lim = size;
-  if(size > nVars) lim = nVars; 
-  
+  if (size > nVars)
+    lim = nVars;
+
   Model modl{};
-  if(nVars == mod.size()){
+  if (nVars == mod.size()) {
     modl = mod;
-  }
-  else{
+  } else {
     modl = Model{(Model::size_type)nVars};
     int i = 0;
-    for(int n = lim; i < n; i++ )
+    for (int n = lim; i < n; i++)
       modl[i] = mod[i];
-    for(int n = nVars; i < n; i++)
+    for (int n = nVars; i < n; i++)
       modl[i] = l_False;
   }
   return modl;
 }
-void Solution::push(const Model& m, notes_t notes){mods[id++]=std::make_pair(OneSolution{this, m}, notes);}
-void Solution::push(Model&& m, notes_t notes){mods[id++]=std::make_pair(OneSolution{this, std::move(m)}, notes);}
-void Solution::push(OneSolution& os, notes_t notes){mods[id++]=std::make_pair(os, notes);}
+void Solution::push(const Model &m, notes_t notes) {
+  mods[id++] = std::make_pair(OneSolution{this, m}, notes);
+}
+void Solution::push(Model &&m, notes_t notes) {
+  mods[id++] = std::make_pair(OneSolution{this, std::move(m)}, notes);
+}
+void Solution::push(OneSolution &os, notes_t notes) {
+  mods[id++] = std::make_pair(os, notes);
+}
 // by default makes sure the result is free of inter-dominances. check
 // toggles testing the new element, filter toggles testing the set. If
 // Returns true if the model gets into the solution.
-bool Solution::pushSafe(const Model& m, notes_t notes, bool check_new, bool check_old ){
+bool Solution::pushSafe(const Model &m, notes_t notes, bool check_new,
+                        bool check_old) {
   OneSolution osol_a{this, m};
-  if(check_old)
-    for(auto it = begin(), last = end();it != last;){
-      Solution::OneSolution& osol = it->second.first;
-      if((osol_a.yPoint() != osol.yPoint()) && pareto::dominates(osol_a, osol)){
-	std::cout << "c new " << osol_a << 
-	  " dominates " << osol << '\n';
-	it = remove(it);
-	dropped++;
-      }else
-	++it;
+  if (check_old)
+    for (auto it = begin(), last = end(); it != last;) {
+      Solution::OneSolution &osol = it->second.first;
+      if ((osol_a.yPoint() != osol.yPoint()) &&
+          pareto::dominates(osol_a, osol)) {
+        std::cout << "c new " << osol_a << " dominates " << osol << '\n';
+        it = remove(it);
+        dropped++;
+      } else
+        ++it;
     }
 
-  if(!check_new || (check_new && !pareto::dominates((*this), osol_a))){
+  if (!check_new || (check_new && !pareto::dominates((*this), osol_a))) {
     push(m, notes);
     return true;
   }
@@ -740,33 +751,36 @@ bool Solution::pushSafe(const Model& m, notes_t notes, bool check_new, bool chec
   return false;
 }
 
-std::ostream& openwbo::operator<<(std::ostream& os, const Model& mdl){
-  auto print = [&os](const lbool& lb, int i){
-    if(lb == l_False) os << "-";
+std::ostream &openwbo::operator<<(std::ostream &os, const Model &mdl) {
+  auto print = [&os](const lbool &lb, int i) {
+    if (lb == l_False)
+      os << "-";
     os << "x" << i;
   };
-  if(mdl.size()){
+  if (mdl.size()) {
     {
       Model::size_type i = 1;
-      print(mdl[i],i);
-      for(; i < mdl.size(); i++){
-	os << " ";
-	print(mdl[i],i);
-      }}}
+      print(mdl[i], i);
+      for (; i < mdl.size(); i++) {
+        os << " ";
+        print(mdl[i], i);
+      }
+    }
+  }
   return os;
-
 }
 
-std::ostream& openwbo::operator<<(std::ostream& os, const YPoint& yp){
-  auto print = [&os](uint32_t v){
-    os << v;
-  };
-  if(yp.size()){
-    {YPoint::size_type i = 0;
+std::ostream &openwbo::operator<<(std::ostream &os, const YPoint &yp) {
+  auto print = [&os](uint32_t v) { os << v; };
+  if (yp.size()) {
+    {
+      YPoint::size_type i = 0;
       print(yp[i++]);
-      for(; i < yp.size(); i++){
-	os << " ";
-	print(yp[i]);
-      }}}
+      for (; i < yp.size(); i++) {
+        os << " ";
+        print(yp[i]);
+      }
+    }
+  }
   return os;
 }
