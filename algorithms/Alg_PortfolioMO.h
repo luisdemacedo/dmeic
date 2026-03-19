@@ -37,7 +37,7 @@ public:
 
   ~PortfolioMO() {}
 
-  bool searchPortfolioMO();
+  StatusCode search() override;
   void search_MO() override;
   const std::vector<PBtoCNF *> &getSolvers() const { return _portfolio; }
 

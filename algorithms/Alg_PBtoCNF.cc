@@ -1134,8 +1134,7 @@ StatusCode PBtoCNF::search() {
   printStats();
   printf("done\n");
   // Make sure the conflict budget is turned off.
-  if (solver)
-    solver->budgetOff();
+  solver->budgetOff();
   return answerType;
 }
 
