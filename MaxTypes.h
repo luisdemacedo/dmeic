@@ -93,6 +93,7 @@ enum StatusCode {
   _ERROR_ = 50,
   _MEMOUT_ = 60,
   _BUDGET_ = 70,
+  _INTERRUPTED_ = 80,
 };
 enum {
   _INCREMENTAL_NONE_ = 0,

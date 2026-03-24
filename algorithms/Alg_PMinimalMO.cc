@@ -37,6 +37,14 @@ void PMinimalMO::search_MO() {
 
       printf("c search\n");
       searchPMinimalMO();
+      if (_stopSearch->load(std::memory_order_acquire)) {
+        answerType = _INTERRUPTED_;
+        printf(
+            "After checking stopSearch (%p), another thread requested to stop "
+            "the search. Thread %d stopping now...\n",
+            _stopSearch, omp_get_thread_num());
+        return;
+      }
 
     } else {
       printf("c No more solutions!\n");
@@ -70,6 +78,9 @@ void PMinimalMO::search_MO() {
       clearLowerBoundSet();
   }
 
+  printf("I am thread %d setting pointer stopSearch (%p) to true\n",
+         omp_get_thread_num(), _stopSearch);
+  _stopSearch->store(true, std::memory_order_release);
   printAnswer(answerType);
 }
 
@@ -81,8 +92,30 @@ bool PMinimalMO::searchPMinimalMO() {
 
   assumptions.clear();
 
+  if (_stopSearch->load(std::memory_order_acquire)) {
+    printf("After checking stopSearch (%p), another thread requested to stop "
+           "the search. Thread %d stopping now...\n",
+           _stopSearch, omp_get_thread_num());
+    return false;
+  }
+
   for (auto sat = solve(); sat == l_True; sat = solve()) {
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return false;
+    }
+
     for (; sat == l_True; sat = solve()) {
+      if (_stopSearch->load(std::memory_order_acquire)) {
+        printf(
+            "After checking stopSearch (%p), another thread requested to stop "
+            "the search. Thread %d stopping now...\n",
+            _stopSearch, omp_get_thread_num());
+        return false;
+      }
+
       Model m = make_model(solver->model);
       solution().pushSafe(m);
       ul = solution().yPoint();

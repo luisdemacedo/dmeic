@@ -22,14 +22,15 @@ public:
               int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
               int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
               std::vector<PBtoCNF *> portfolio = {})
-      : PBtoCNF(verb, weight, strategy, enc, pb, pbobjf,
-                new std::atomic<bool>(false)),
+      : PBtoCNF(verb, weight, strategy, enc, pb, pbobjf),
         _portfolio(portfolio) {
 
     if (portfolio.empty()) {
       std::cerr << "Error: Portfolio is empty." << std::endl;
       exit(1);
     }
+    setStopSearchFlag(new std::atomic<bool>(false));
+    printf("stop search flag address: %p\n", getStopSearchFlag());
     for (auto &solver : _portfolio) {
       solver->setStopSearchFlag(getStopSearchFlag());
     }

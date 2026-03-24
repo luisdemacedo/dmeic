@@ -54,6 +54,7 @@ void UnsatSatMO::search_MO() {
   } else {
     printf("c No more solutions!\n");
   }
+
   printf("c Done searching\n");
   PBtoCNF::consolidateSolution();
   if (solution().size() > 0) {

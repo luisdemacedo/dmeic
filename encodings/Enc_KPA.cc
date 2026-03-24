@@ -587,7 +587,8 @@ uint64_t KPA::printPBfunction(Solver *S) {
 
   char hostname[HOST_NAME_MAX];
   gethostname(hostname, HOST_NAME_MAX);
-  sprintf(ifname, "/tmp/in-%s-%d-%d.opb", hostname, ::getpid(), ::gettid());
+  sprintf(ifname, "/tmp/in-%s-%d-%d.opb", hostname, ::getpid(),
+          omp_get_thread_num());
 
 #ifdef __DEBUG__
   printf("c [KP::printPBfunction] %s\n", ifname);
@@ -712,7 +713,8 @@ void KPA::run_sat4j(uint64_t ub) {
   gethostname(hostname, HOST_NAME_MAX);
   //     sprintf(ifname, "/tmp/in-%s-%d.opb", hostname, ::getpid());
 
-  sprintf(ofname, "/tmp/out-%s-%d-t%d.mocnf", hostname, ::getpid(), ::gettid());
+  sprintf(ofname, "/tmp/out-%s-%d-t%d.mocnf", hostname, ::getpid(),
+          omp_get_thread_num());
 
   const char *cmdbase = "java -jar %s/%s -ib 1 -ul 0:%d %s -o %s";
 

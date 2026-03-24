@@ -13,6 +13,7 @@
 #include "../MOCO.h"
 #include "../Pareto.h"
 #include "../encodings/RootLits.h"
+#include "omp.h"
 #include "utils/System.h"
 #include <atomic>
 #include <map>
@@ -96,7 +97,7 @@ public:
     return _smallestMCS;
   }
 
-  void setStopSearchFlag(std::atomic<bool> *stopSearch) {
+  virtual void setStopSearchFlag(std::atomic<bool> *stopSearch) {
     _stopSearch = stopSearch;
   }
 

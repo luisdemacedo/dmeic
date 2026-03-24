@@ -12,10 +12,23 @@ void SlideDrillMO::search_MO() {
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
     waiting_list->insert(yp);
     searchBoundHonerMO();
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      answerType = _INTERRUPTED_;
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return;
+    }
+
     consolidateSolution();
     answerType = _OPTIMUM_;
   } else
     answerType = openwbo::_UNSATISFIABLE_;
+
+  printf("I am thread %d setting pointer stopSearch (%p) to true\n",
+         omp_get_thread_num(), _stopSearch);
+  _stopSearch->store(true, std::memory_order_release);
+
   printAnswer(answerType);
 }
 bool SlideDrillMO::searchBoundHonerMO() {
@@ -27,10 +40,23 @@ bool SlideDrillMO::searchBoundHonerMO() {
   while (answerType != _BUDGET_) {
     if (!drill())
       break;
+
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return false;
+    }
     if (slide()) {
       if (!solver->conflict.size())
         return true;
       // prune(solver->conflict, drill_marker);
+    }
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return false;
     }
   }
   return true;
@@ -52,6 +78,12 @@ bool SlideDrillMO::drill() {
       for (auto l : it->second.deps)
         assumptions.push(~l);
     }
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return true;
+    }
 
     // look for the first queued element that is not optimal
     if ((sat = solve()) != l_False) {
@@ -64,6 +96,12 @@ bool SlideDrillMO::drill() {
         return false;
       // prune(solver->conflict, yp);
       std::cout << "c o " << yp << std::endl;
+    }
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return true;
     }
   }
   assumptions.clear();
@@ -246,7 +284,22 @@ bool SlideDrillMO::slide() {
       asssumeIncomparableRegion(yp, l);
       assumptions.push(~l);
     }
+    if (_stopSearch->load(std::memory_order_acquire)) {
+      printf("After checking stopSearch (%p), another thread requested to stop "
+             "the search. Thread %d stopping now...\n",
+             _stopSearch, omp_get_thread_num());
+      return false;
+    }
+
   } while ((sat = solve()) == l_True);
+
+  if (_stopSearch->load(std::memory_order_acquire)) {
+    printf("After checking stopSearch (%p), another thread requested to stop "
+           "the search. Thread %d stopping now...\n",
+           _stopSearch, omp_get_thread_num());
+    return false;
+  }
+
   // fix temporary variables used during slide, which are listed
   // in the assumptions.
   if (sat == l_Undef) {

@@ -6,6 +6,7 @@
 
 namespace pareto {
 using namespace openwbo;
+// TODO: Maybe not thread local, but global with mutex
 extern thread_local YPoint max;
 extern thread_local YPoint min;
 extern thread_local uint64_t hv_total;

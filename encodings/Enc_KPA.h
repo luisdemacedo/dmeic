@@ -40,6 +40,7 @@
 #include "../maxConsts.h"
 #include "Encodings.h"
 #include "core/SolverTypes.h"
+#include "omp.h"
 #include <cstdint>
 #include <map>
 #include <set>

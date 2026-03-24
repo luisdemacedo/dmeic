@@ -514,8 +514,9 @@ MaxSAT *buildSolver() {
     break;
   case _ALGORITHM_PORTFOLIO_: {
     std::vector<openwbo::PBtoCNF *> workers = {};
-    workers.push_back(new UnsatSatMO(verbosity, weight, partition_strategy,
-                                     cardinality, pb, pbobjf));
+    workers.push_back(
+        new UnsatSatBudgetMO(verbosity, weight, partition_strategy, cardinality,
+                             pb, pbobjf, conf_core, conf_budget, core_block));
     workers.push_back(new PMinimalMO(verbosity, weight, partition_strategy,
                                      cardinality, pb, pbobjf));
     workers.push_back(new HittingSetsMO(verbosity, weight, partition_strategy,
