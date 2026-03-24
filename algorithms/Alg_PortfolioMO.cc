@@ -5,8 +5,6 @@ namespace openwbo {
 StatusCode PortfolioMO::search() {
 #pragma omp parallel for
   for (size_t idx = 0; idx < _portfolio.size(); idx++) {
-    if (omp_get_thread_num() != 3)
-      sleep(3); // sleep for a while to let the first thread start the search
     _portfolio[idx]->search();
   }
 
