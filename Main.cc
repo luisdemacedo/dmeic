@@ -366,7 +366,113 @@ void setLimits() {
     limitMemory(mem_lim);
 }
 
-MaxSAT *buildSolver() {
+std::vector<PBtoCNF *> createPortfolio(const char *filename) {
+  printf("c [Main] parsePortfolioConfig()\n");
+  printf("c [Main] filename: %s\n", filename);
+  std::ifstream file(filename);
+  std::string line;
+  size_t num_solvers = 0;
+  bool in_solver_block = false;
+  std::vector<openwbo::PBtoCNF *> solvers = {};
+  bool terminate_on_first = false;
+  std::vector<std::string> solver_params;
+  std::vector<char *> solver_params_c;
+  int solver_params_count = 0;
+  std::string solver_alg;
+
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#')
+      continue; // Skip empty lines and comments
+    printf("c [Main] line: %s\n", line.c_str());
+
+    line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
+    auto colon_pos = line.find(':');
+    if (colon_pos == std::string::npos) {
+      printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
+             line.c_str());
+      continue;
+    }
+
+    std::string key = line.substr(0, colon_pos);
+    std::string value = line.substr(colon_pos + 1);
+
+    std::cout << "key: " << key << std::endl;
+    std::cout << "value: " << value << std::endl;
+    if (key == "num_solvers") {
+      num_solvers = std::stoul(value);
+    } else if (key == "use_termination_flag") {
+      terminate_on_first = (value == "true");
+    } else if (key == "solver") {
+      in_solver_block = true;
+      while (in_solver_block && std::getline(file, line)) {
+        if (line.empty() || line[0] == '#')
+          continue;
+        line.erase(std::remove_if(line.begin(), line.end(), ::isspace),
+                   line.end());
+        if (line == "end_solver")
+          break;
+
+        colon_pos = line.find(':');
+        if (colon_pos == std::string::npos) {
+          printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
+                 line.c_str());
+          continue;
+        }
+        std::string param_key = line.substr(0, colon_pos);
+        std::string param_value = line.substr(colon_pos + 1);
+        if (param_key == "algorithm") {
+          solver_alg = param_value;
+          continue;
+        }
+        solver_params.push_back(std::string("-") + param_key +
+                                std::string("=") + param_value);
+      }
+
+      for (const auto &param : solver_params) {
+        printf("c [Main] solver param: %s\n", param.c_str());
+      }
+      solver_params_count = solver_params.size();
+      for (auto &s : solver_params) {
+        solver_params_c.push_back(s.data());
+      }
+      parseOptions(solver_params_count, solver_params_c.data(), false);
+
+      if (solver_alg == "pmin") {
+
+        solvers.push_back(new PMinimalMO(
+            options::verbosity, options::weight, options::partition_strategy,
+            options::cardinality, options::pb, options::pbobjf));
+      } else if (solver_alg == "us") {
+        solvers.push_back(new UnsatSatBudgetMO(
+            options::verbosity, options::weight, options::partition_strategy,
+            options::cardinality, options::pb, options::pbobjf,
+            options::conf_core, options::conf_budget, options::core_block));
+      } else if (solver_alg == "hs") {
+        solvers.push_back(new HittingSetsMO(
+            options::verbosity, options::weight, options::partition_strategy,
+            options::cardinality, options::pb, options::pbobjf));
+      } else if (solver_alg == "sd") {
+        solvers.push_back(new SlideDrillMO(
+            options::verbosity, options::weight, options::partition_strategy,
+            options::cardinality, options::pb, options::pbobjf));
+      } else {
+        fprintf(stderr,
+                "c Error: Invalid solver algorithm in portfolio config: %s\n",
+                solver_alg.c_str());
+        exit(_ERROR_);
+      }
+
+      solver_params_count = 0;
+      solver_params_c.clear();
+      solver_params.clear();
+      in_solver_block = false;
+    }
+  }
+
+  return solvers;
+}
+
+MaxSAT *buildSolver(int argc, char **argv) {
   using namespace options;
   MaxSAT *S = nullptr;
 
@@ -513,18 +619,18 @@ MaxSAT *buildSolver() {
                     pbobjf);
     break;
   case _ALGORITHM_PORTFOLIO_: {
-    std::vector<openwbo::PBtoCNF *> workers = {};
-    workers.push_back(
-        new UnsatSatBudgetMO(verbosity, weight, partition_strategy, cardinality,
-                             pb, pbobjf, conf_core, conf_budget, core_block));
-    workers.push_back(new PMinimalMO(verbosity, weight, partition_strategy,
-                                     cardinality, pb, pbobjf));
-    workers.push_back(new HittingSetsMO(verbosity, weight, partition_strategy,
-                                        cardinality, pb, pbobjf));
-    workers.push_back(new SlideDrillMO(verbosity, weight, partition_strategy,
-                                       cardinality, pb, pbobjf));
+    if (argc < 3) {
+      printf("c Error: Portfolio algorithm requires a configuration file.\n");
+      printf("s UNKNOWN\n");
+      exit(_ERROR_);
+      break;
+    }
+
+    std::vector<openwbo::PBtoCNF *> solvers = createPortfolio(argv[2]);
+    parseOptions(argc, argv, true);
     S = new PortfolioMO(verbosity, weight, partition_strategy, cardinality, pb,
-                        pbobjf, workers);
+                        pbobjf, solvers);
+    // TODO: stopsearch flag toggle
     break;
   }
   default:
@@ -537,9 +643,9 @@ MaxSAT *buildSolver() {
 }
 
 void printHeader() {
-  printf(
-      "c\nc Open-WBO:\t a Modular MaxSAT Solver -- based on %s (%s version)\n",
-      SATVER, VER);
+  printf("c\nc Open-WBO:\t a Modular MaxSAT Solver -- based on %s (%s "
+         "version)\n",
+         SATVER, VER);
   printf("c Version:\t September 2018 -- Release: 2.1\n");
   printf("c Authors:\t Ruben Martins, Vasco Manquinho, Ines Lynce\n");
   printf("c Contributors:\t Miguel Neves, Saurabh Joshi, Norbert Manthey, "
@@ -567,7 +673,8 @@ MaxSATFormula *buildFormula(int argc, char **argv) {
 
     int64_t min = 0, max = 0;
 
-    // bounds::BoundsCalculator calc = bounds::BoundsCalculator{maxsat_formula};
+    // bounds::BoundsCalculator calc =
+    // bounds::BoundsCalculator{maxsat_formula};
     for (int i = 0; i < maxsat_formula->nObjFunctions(); i++) {
       max = maxsat_formula->getObjFunction(i)->ub();
       max += maxsat_formula->getObjFunction(i)->_const;
@@ -620,8 +727,7 @@ void printConfig(MaxSATFormula *maxsat_formula, double initial_time) {
            "MaxSAT");
   else
     //       printf(
-    //           "c |  Problem Format:  %17s " "                          |\n",
-    //           "PB");
+    //           "c |  Problem Format:  %17s " " |\n", "PB");
     printf("c |  Problem Format:  %17s                                         "
            "                          |\n"
            "c |  Number of objectives:  %11d                                   "
@@ -711,8 +817,12 @@ int set_buffer_mode() {
 
   return 0;
 }
+
 int main(int argc, char **argv) {
 
+  for (int i = 0; i < argc; i++) {
+    printf("c [Main] argv[%d]: %s\n", i, argv[i]);
+  }
   printHeader();
   context::setCwd(argv);
   // set line buffering explicitly
@@ -737,7 +847,7 @@ int main(int argc, char **argv) {
     NSPACE::setUsageHelp("c USAGE: %s [options] <input-file>\n\n");
     parseOptions(argc, argv, true);
     setLimits();
-    MaxSAT *S = buildSolver();
+    MaxSAT *S = buildSolver(argc, argv);
 
     double initial_time = cpuTime();
 
