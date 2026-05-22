@@ -87,37 +87,45 @@ public:
     snapshotSolutions = std::move(newSnapshot);
 
     auto t_end = clock::now();
-    syncTimeByThread[thread_id] +=
+
+    auto callSyncTime =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
-    lockWaitTimeByThread[thread_id] +=
+    auto callLockWaitTime =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t_lock_acquired -
                                                              t_start);
-    snapshotCreationTimeByThread[thread_id] +=
+    auto callSnapshotCreationTime =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t_copy_end -
                                                              t_copy);
+    auto callHeldTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        t_end - t_lock_acquired);
+
+    syncTimeByThread[thread_id] += callSyncTime;
+    lockWaitTimeByThread[thread_id] += callLockWaitTime;
+    snapshotCreationTimeByThread[thread_id] += callSnapshotCreationTime;
     solutionsPushedByThread[thread_id] += toAdd.size();
     solutionsPulledByThread[thread_id] += result.size();
 
-    DLOG(stderr, "[s%d] Released shared solutions lock...\n",
-         omp_get_thread_num());
     DLOG(stderr,
-         "[s%d] Time taken for syncSolutions: %lld ms (lock wait: %lld ms, "
-         "snapshot creation: %lld "
-         "ms)\n",
+         "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
+         "snapshot: %lld ms, "
+         "candidates: %zu, shared: %zu, pulled: %zu, pushed: %zu\n",
          omp_get_thread_num(),
          static_cast<long long>(
-             std::chrono::duration_cast<std::chrono::milliseconds>(
-                 syncTimeByThread[thread_id])
+             std::chrono::duration_cast<std::chrono::milliseconds>(callSyncTime)
                  .count()),
          static_cast<long long>(
              std::chrono::duration_cast<std::chrono::milliseconds>(
-                 lockWaitTimeByThread[thread_id])
+                 callLockWaitTime)
+                 .count()),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(callHeldTime)
                  .count()),
          static_cast<long long>(
              std::chrono::duration_cast<std::chrono::milliseconds>(
-                 snapshotCreationTimeByThread[thread_id])
-                 .count()));
-
+                 callSnapshotCreationTime)
+                 .count()),
+         candidates.size(), sharedSolutions.size(), result.size(),
+         toAdd.size());
     return result;
   }
 
