@@ -31,14 +31,6 @@ public:
       buildWorkFormula();
       auto res = searchMasterMO();
 
-      if (_stopSearch->load(std::memory_order_acquire)) {
-        answerType = _INTERRUPTED_;
-        printf(
-            "After checking stopSearch (%p), another thread requested to stop "
-            "the search. Thread %d stopping now...\n",
-            _stopSearch, omp_get_thread_num());
-        return;
-      }
       consolidateSolution();
       if (res == _OPTIMUM_ || res == _UNSATISFIABLE_)
         if (solution().size() == 0)
@@ -47,41 +39,82 @@ public:
           answerType = _OPTIMUM_;
       else
         answerType = res;
+      if (getStopSearchFlag()) {
+        answerType = _INTERRUPTED_;
+        DLOG(stderr,
+             "%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Search stopped.\n",
+             getSolverId().c_str());
+        if (!_stopSearch)
+          printAnswer(answerType);
+        return;
+      }
 
     } else
       answerType = openwbo::_UNSATISFIABLE_;
 
-    printf("I am thread %d setting pointer stopSearch (%p) to true\n",
-           omp_get_thread_num(), _stopSearch);
-    _stopSearch->store(true, std::memory_order_release);
-    printAnswer(answerType);
+    requestStopSearch();
+    shareSolutions(true);
+    if (!_stopSearch)
+      printAnswer(answerType);
   }
 
   StatusCode searchMasterMO() {
     auto res = _UNKNOWN_;
     do {
       res = compute_approx();
-      if (_stopSearch->load(std::memory_order_acquire)) {
-        printf(
-            "After checking stopSearch (%p), another thread requested to stop "
-            "the search. Thread %d stopping now...\n",
-            _stopSearch, omp_get_thread_num());
+      if (getStopSearchFlag()) {
+        DLOG(stderr,
+             "%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
         return answerType;
       }
 
       incorporate_approx();
       if (res == _BUDGET_)
         return res;
+
+      shareClauses();
+      shareSolutions(true);
     } while (setup_approx());
     return res;
   }
 
-  void setStopSearchFlag(std::atomic<bool> *stopSearch) override {
+  void
+  setStopSearchFlag(std::shared_ptr<std::atomic<bool>> stopSearch) override {
     PBtoCNF::setStopSearchFlag(stopSearch);
     optim->setStopSearchFlag(stopSearch);
   }
+
+  void setClausesBag(
+      std::shared_ptr<clausesharing::ISharedClausesBag> bag) override {
+    PBtoCNF::setClausesBag(bag);
+    optim->setClausesBag(bag);
+  }
+
+  void setSharedSolutionsSet(
+      std::shared_ptr<solutionsharing::ISharedSolutionsSet> set) override {
+    PBtoCNF::setSharedSolutionsSet(set);
+    optim->setSharedSolutionsSet(set);
+  }
+
+  void setShareClauses(bool share) override {
+    PBtoCNF::setShareClauses(share);
+    optim->setShareClauses(share);
+  }
+
+  void setClauseSharingHeuristic(
+      clausesharing::IClauseSharingHeuristic *heuristic) override {
+    PBtoCNF::setClauseSharingHeuristic(heuristic);
+    optim->setClauseSharingHeuristic(heuristic);
+  }
+
+  void blockDominatedRegion(const YPoint &yp) override {
+    optim->applyBlockDominatedRegion(yp);
+  }
+
+  void interruptSolver() override { optim->interruptSolver(); }
 };
-
 } // namespace openwbo
-
 #endif

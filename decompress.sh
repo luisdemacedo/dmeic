@@ -48,10 +48,11 @@ function mmktemp(){
     # creates tmp file name. Avoids thrashing over existent files
     local result=$(basename $1)
     local n=""
-    while [ -f "/tmp/$n$result" ]; do
+    local tmpdir="${TMPDIR:-/tmp}"
+    while [ -f "$tmpdir/$n$result" ]; do
 	n=$((n+1))
     done
-    echo "/tmp/$n$result"
+    echo "$tmpdir/$n$result"
 }
 function path(){
     # sets path to naked path in argv, complains if no such string

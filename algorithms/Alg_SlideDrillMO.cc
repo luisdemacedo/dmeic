@@ -12,11 +12,13 @@ void SlideDrillMO::search_MO() {
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
     waiting_list->insert(yp);
     searchBoundHonerMO();
-    if (_stopSearch->load(std::memory_order_acquire)) {
+    if (getStopSearchFlag()) {
       answerType = _INTERRUPTED_;
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Search stopped.\n",
+             getSolverId().c_str());
+      if (!_stopSearch)
+        printAnswer(answerType);
       return;
     }
 
@@ -25,11 +27,11 @@ void SlideDrillMO::search_MO() {
   } else
     answerType = openwbo::_UNSATISFIABLE_;
 
-  printf("I am thread %d setting pointer stopSearch (%p) to true\n",
-         omp_get_thread_num(), _stopSearch);
-  _stopSearch->store(true, std::memory_order_release);
+  requestStopSearch();
 
-  printAnswer(answerType);
+  shareSolutions(true);
+  if (!_stopSearch)
+    printAnswer(answerType);
 }
 bool SlideDrillMO::searchBoundHonerMO() {
   YPoint yp{};
@@ -41,10 +43,10 @@ bool SlideDrillMO::searchBoundHonerMO() {
     if (!drill())
       break;
 
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return false;
     }
     if (slide()) {
@@ -52,10 +54,10 @@ bool SlideDrillMO::searchBoundHonerMO() {
         return true;
       // prune(solver->conflict, drill_marker);
     }
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return false;
     }
   }
@@ -69,7 +71,8 @@ bool SlideDrillMO::drill() {
     assumptions.clear();
     yp = waiting_list->pop();
 
-    cout << "c " << "drill from " << yp << " with hv=" << hv(yp) << endl;
+    cout << getSolverId() << "c " << "drill from " << yp
+         << " with hv=" << hv(yp) << endl;
     auto it = mem.find(yp);
     // assume dominating region, until the next drill takes place.
     PBtoCNF::assumeDominatingRegion(yp);
@@ -78,35 +81,42 @@ bool SlideDrillMO::drill() {
       for (auto l : it->second.deps)
         assumptions.push(~l);
     }
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return true;
     }
 
     // look for the first queued element that is not optimal
+    shareSolutions(true);
     if ((sat = solve()) != l_False) {
       break;
     } else {
       // describe_core(solver->conflict);
-      printf("c if sat, optimal solution (time: %.3f)\n",
-             runtime - initialTime);
+      printf("%sc if sat, optimal solution (time: %.3f)\n",
+             getSolverId().c_str(), runtime - initialTime);
       if (!solver->conflict.size())
         return false;
       // prune(solver->conflict, yp);
-      std::cout << "c o " << yp << std::endl;
+      // std::cout << getSolverId() << "c o " << yp << std::endl;
+      std::ostringstream oss;
+      oss << yp;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
     }
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return true;
     }
+    shareClauses();
   }
   assumptions.clear();
   if (sat == l_Undef) {
-    cout << "c budget exhausted during drill. Push " << yp << " again" << endl;
+    cout << getSolverId() << "c budget exhausted during drill. Push " << yp
+         << " again" << endl;
     answerType = _BUDGET_;
     waiting_list->unpop(1);
     return false;
@@ -122,14 +132,15 @@ bool SlideDrillMO::check(YPoint yp) {
   int i = 0;
   for (const auto &xa : us)
     if (pareto::dominates(yp, xa)) {
-      cout << "c point " << yp << " used because " << "it dominates " << xa
-           << endl;
+      cout << getSolverId() << "c point " << yp << " used because "
+           << "it dominates " << xa << endl;
       return true;
     }
   for (const auto &xb : ls) {
     if (pareto::dominates(xb, yp)) {
-      cout << "c point " << yp << " used because " << "it is dominated by "
-           << xb << " after " << i << " in " << ls.size() << endl;
+      cout << getSolverId() << "c point " << yp << " used because "
+           << "it is dominated by " << xb << " after " << i << " in "
+           << ls.size() << endl;
       return true;
     } else
       i++;
@@ -197,8 +208,8 @@ bool SlideDrillMO::prune(const vec<Lit> &conflict, YPoint yp) {
       for (auto &xa : al)
         // if intersection is not empty
         if (pareto::dominates(xb, xa)) {
-          cout << "c " << "approximate xb=" << xb << ", xa=" << xa
-               << " pair by ";
+          cout << getSolverId() << "c " << "approximate xb=" << xb
+               << ", xa=" << xa << " pair by ";
           // if region dominated by xb is larger than region
           // dominating xa,
           if (pareto::hv_shift(xa, pareto::min) < hvb) {
@@ -250,7 +261,8 @@ bool SlideDrillMO::slide() {
   auto n_it = mem.find(drill_marker);
   PBtoCNF::assumeDominatingRegion(drill_marker);
   if (n_it != mem.end()) {
-    std::cout << "c restart slide under " << drill_marker << endl;
+    std::cout << getSolverId() << "c restart slide under " << drill_marker
+              << endl;
     // block region below slide produces
     for (auto dep : n_it->second.deps)
       assumptions.push(~dep);
@@ -272,38 +284,45 @@ bool SlideDrillMO::slide() {
       n.deps.push_back(l);
       slide_map[l] = yp;
       waiting_list->insert(yp);
-      printf("c o ");
-      std::cout << sol << std::endl;
+      std::ostringstream oss;
+      oss << sol;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
+      // printf("%sc o ", getSolverId().c_str());
+      // std::cout << sol << std::endl;
       runtime = cpuTime();
-      printf("c new suboptimal solution (time: %.3f)\n", runtime - initialTime);
+      printf("%sc new suboptimal solution (time: %.3f)\n",
+             getSolverId().c_str(), runtime - initialTime);
       // temporarily avoid region dominating last point
-      std::cout << "c " << "slide from " << yp << endl;
+      std::cout << getSolverId() << "c " << "slide from " << yp << endl;
       blockStep(yp);
       // add temporary clause, and set toggling variable through global
       // assumptions
       asssumeIncomparableRegion(yp, l);
       assumptions.push(~l);
     }
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return false;
     }
 
+    shareClauses();
+    shareSolutions(true);
   } while ((sat = solve()) == l_True);
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
 
   // fix temporary variables used during slide, which are listed
   // in the assumptions.
   if (sat == l_Undef) {
-    std::cout << "c budget exhausted during slide.";
+    std::cout << getSolverId() << "c budget exhausted during slide.";
     if (!drill_marker.empty()) {
       std::cout << " Push " << drill_marker << " again";
       waiting_list->unpop(0);
@@ -335,7 +354,7 @@ void SlideDrillMO::asssumeIncomparableRegion(const YPoint &yp, Lit l) {
   solver->addClause(clause);
 }
 void SlideDrillMO::describe_core(const conflict_t &conf) {
-  cout << "c new core";
+  cout << getSolverId() << "c new core";
   if (!conf.size()) {
     cout << " empty core" << endl;
     return;

@@ -82,6 +82,7 @@
 #include "algorithms/Alg_UnsatSatEpsilonDecayMO.h"
 #include "algorithms/Alg_UnsatSatEpsilonMO.h"
 #include "algorithms/Alg_UnsatSatHonerMO.h"
+#include "clausesharing/SizeHeuristic.h"
 #include "context.h"
 #include "maxConsts.h"
 // path used when calling the articact
@@ -117,6 +118,13 @@ static void SIGINT_exit(int signum) {
   exit(_UNKNOWN_);
 }
 
+static void SIG_exit_portfolio(int signum) {
+  if (mxsolver != NULL) {
+    static_cast<PortfolioMO *>(mxsolver)->requestStopSearch();
+    static_cast<PortfolioMO *>(mxsolver)->interruptSolver();
+    exit(_INTERRUPTED_);
+  }
+}
 //=================================================================================================
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 void limitMemory(uint64_t max_mem_mb) {
@@ -355,6 +363,28 @@ DoubleOption geometric_ratio("geometric progression ratio ", "geo_p",
 IntOption arithmetic_shift("arithmetic progression", "ari_p",
                            ". number of values to jump over\n", 1);
 
+// Portfolio options
+BoolOption
+    stop_on_first_result("Portfolio", "stop-on-first-result",
+                         "Whether to stop the portfolio search after the first "
+                         "solver finishes.\n",
+                         false);
+
+BoolOption share_solutions("Portfolio", "share-solutions",
+                           "Whether to share solutions between solvers in the "
+                           "portfolio\n",
+                           false);
+
+BoolOption share_clauses("Portfolio", "share-clauses",
+                         "Whether to share learnt clauses between solvers in "
+                         "the portfolio\n",
+                         -1);
+
+IntOption sharing_heuristic(
+    "Portfolio", "sharing_heuristic",
+    "Heuristic for clause sharing (0=none, 1=size heuristic).\n", 0,
+    IntRange(0, 1));
+
 } // namespace options
 
 void setLimits() {
@@ -367,23 +397,18 @@ void setLimits() {
 }
 
 std::vector<PBtoCNF *> createPortfolio(const char *filename) {
-  printf("c [Main] parsePortfolioConfig()\n");
-  printf("c [Main] filename: %s\n", filename);
   std::ifstream file(filename);
   std::string line;
   size_t num_solvers = 0;
-  bool in_solver_block = false;
-  std::vector<openwbo::PBtoCNF *> solvers = {};
-  bool terminate_on_first = false;
-  std::vector<std::string> solver_params;
-  std::vector<char *> solver_params_c;
-  int solver_params_count = 0;
+  std::vector<char *> params;
+  int params_count = 0;
   std::string solver_alg;
 
-  while (std::getline(file, line)) {
+  // Config parsing: first read and set global settings
+  params.push_back(strdup("dummy")); // Parse options skip the first argument
+  while (std::getline(file, line) && line != "portfolio:") {
     if (line.empty() || line[0] == '#')
       continue; // Skip empty lines and comments
-    printf("c [Main] line: %s\n", line.c_str());
 
     line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
     auto colon_pos = line.find(':');
@@ -396,46 +421,48 @@ std::vector<PBtoCNF *> createPortfolio(const char *filename) {
     std::string key = line.substr(0, colon_pos);
     std::string value = line.substr(colon_pos + 1);
 
-    std::cout << "key: " << key << std::endl;
-    std::cout << "value: " << value << std::endl;
-    if (key == "num_solvers") {
+    if (key == "workers") {
       num_solvers = std::stoul(value);
-    } else if (key == "use_termination_flag") {
-      terminate_on_first = (value == "true");
-    } else if (key == "solver") {
-      in_solver_block = true;
-      while (in_solver_block && std::getline(file, line)) {
-        if (line.empty() || line[0] == '#')
-          continue;
-        line.erase(std::remove_if(line.begin(), line.end(), ::isspace),
-                   line.end());
-        if (line == "end_solver")
-          break;
+    } else if (key == "output_file") {
+      key = "save-my-output";
+    } else if (key == "stop-on-first-result" || key == "share-clauses" ||
+               key == "share-solutions" || key == "print-model") {
+      if (value == "true")
+        params.push_back(strdup(("-" + key).c_str()));
+      else if (value == "false")
+        params.push_back(strdup(("-no-" + key).c_str()));
 
-        colon_pos = line.find(':');
-        if (colon_pos == std::string::npos) {
-          printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
-                 line.c_str());
-          continue;
-        }
-        std::string param_key = line.substr(0, colon_pos);
-        std::string param_value = line.substr(colon_pos + 1);
-        if (param_key == "algorithm") {
-          solver_alg = param_value;
-          continue;
-        }
-        solver_params.push_back(std::string("-") + param_key +
-                                std::string("=") + param_value);
-      }
+      continue;
+    }
 
-      for (const auto &param : solver_params) {
-        printf("c [Main] solver param: %s\n", param.c_str());
-      }
-      solver_params_count = solver_params.size();
-      for (auto &s : solver_params) {
-        solver_params_c.push_back(s.data());
-      }
-      parseOptions(solver_params_count, solver_params_c.data(), false);
+    params.push_back(
+        strdup((std::string("-") + key + std::string("=") + value).data()));
+  }
+
+  params_count = params.size();
+  parseOptions(params_count, params.data(), false);
+
+  params_count = 0;
+  for (char *p : params)
+    if (strncmp(p, "-save-my-output", 15) !=
+        0) // stored by the option, so don't free it here
+      free(p);
+  params.clear();
+  params.push_back(strdup("dummy")); // Parse options skip the first argument
+  std::vector<openwbo::PBtoCNF *> solvers = {};
+
+  size_t solver_idx = 0;
+  clausesharing::IClauseSharingHeuristic *sharing_heuristic = nullptr;
+  while (std::getline(file, line) && solver_idx < num_solvers) {
+
+    if (line.empty() || line[0] == '#' || line == "solver:")
+      continue; // Skip empty lines, comments and solver beginning delimiters
+
+    if (line == "end_solver") {
+      solver_idx++;
+
+      params_count = params.size();
+      parseOptions(params_count, params.data(), false);
 
       if (solver_alg == "pmin") {
 
@@ -461,12 +488,42 @@ std::vector<PBtoCNF *> createPortfolio(const char *filename) {
                 solver_alg.c_str());
         exit(_ERROR_);
       }
+      // TODO: make this more flexible by allowing to specify the heuristic in
+      // the config file
+      solvers.back()->setClauseSharingHeuristic(
+          new clausesharing::SizeHeuristic());
 
-      solver_params_count = 0;
-      solver_params_c.clear();
-      solver_params.clear();
-      in_solver_block = false;
+      if (options::conf_budget != -1) {
+        solvers.back()->setConflictLimit(options::conf_budget);
+        options::conf_budget = -1;
+      }
+
+      params_count = 0;
+      for (char *p : params)
+        free(p);
+      params.clear();
+
+      continue;
     }
+
+    line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
+
+    auto colon_pos = line.find(':');
+    if (colon_pos == std::string::npos) {
+      printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
+             line.c_str());
+      continue;
+    }
+
+    std::string key = line.substr(0, colon_pos);
+    std::string value = line.substr(colon_pos + 1);
+
+    if (key == "algorithm") {
+      solver_alg = value;
+      continue;
+    }
+    params.push_back(
+        strdup((std::string("-") + key + std::string("=") + value).data()));
   }
 
   return solvers;
@@ -629,8 +686,9 @@ MaxSAT *buildSolver(int argc, char **argv) {
     std::vector<openwbo::PBtoCNF *> solvers = createPortfolio(argv[2]);
     parseOptions(argc, argv, true);
     S = new PortfolioMO(verbosity, weight, partition_strategy, cardinality, pb,
-                        pbobjf, solvers);
-    // TODO: stopsearch flag toggle
+                        pbobjf, solvers, options::stop_on_first_result,
+                        options::share_clauses, options::share_solutions);
+    static_cast<PortfolioMO *>(S)->setPrintModel(options::printmodel);
     break;
   }
   default:
@@ -819,10 +877,6 @@ int set_buffer_mode() {
 }
 
 int main(int argc, char **argv) {
-
-  for (int i = 0; i < argc; i++) {
-    printf("c [Main] argv[%d]: %s\n", i, argv[i]);
-  }
   printHeader();
   context::setCwd(argv);
   // set line buffering explicitly
@@ -863,6 +917,12 @@ int main(int argc, char **argv) {
     loadSolver(maxsat_formula, S, initial_time);
     mxsolver = S;
 
+    if (options::algorithm ==
+        _ALGORITHM_PORTFOLIO_) { // Override signal handlers
+      signal(SIGXCPU, SIG_exit_portfolio);
+      signal(SIGTERM, SIG_exit_portfolio);
+      signal(SIGINT, SIG_exit_portfolio);
+    }
     printf("c [Main] mxsolver->search()\n");
     mxsolver->search();
     delete context::cwd;
@@ -872,7 +932,14 @@ int main(int argc, char **argv) {
   } catch (OutOfMemoryException &) {
     sleep(1);
     printf("c Error: Out of memory.\n");
-    mxsolver->printAnswer(_MEMOUT_);
+    if (options::algorithm ==
+        _ALGORITHM_PORTFOLIO_) { // Override signal handlers
+      if (mxsolver != NULL) {
+        static_cast<PortfolioMO *>(mxsolver)->requestStopSearch();
+        static_cast<PortfolioMO *>(mxsolver)->interruptSolver();
+      }
+    } else
+      mxsolver->printAnswer(_MEMOUT_);
     exit(_ERROR_);
   } catch (MaxSATException &e) {
     sleep(1);

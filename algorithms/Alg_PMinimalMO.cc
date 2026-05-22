@@ -35,39 +35,41 @@ void PMinimalMO::search_MO() {
 
     if (resform) {
 
-      printf("c search\n");
+      printf("%sc search\n", getSolverId().c_str());
       searchPMinimalMO();
-      if (_stopSearch->load(std::memory_order_acquire)) {
+      if (getStopSearchFlag()) {
         answerType = _INTERRUPTED_;
-        printf(
-            "After checking stopSearch (%p), another thread requested to stop "
-            "the search. Thread %d stopping now...\n",
-            _stopSearch, omp_get_thread_num());
+        DLOG(stderr,
+             "%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Search stopped.\n",
+             getSolverId().c_str());
+        if (!isInsidePortfolio())
+          printAnswer(answerType);
         return;
       }
 
     } else {
-      printf("c No more solutions!\n");
+      printf("%sc No more solutions!\n", getSolverId().c_str());
     }
-    printf("c Done searching\n");
-    printf("c epsilon: %f\n", epsilon);
-    printf("c reductionFactor: %f\n", redFactor);
+    printf("%sc Done searching\n", getSolverId().c_str());
+    printf("%sc epsilon: %f\n", getSolverId().c_str(), epsilon);
+    printf("%sc reductionFactor: %f\n", getSolverId().c_str(), redFactor);
     if ((permanentBlock && !resform) || epsilon <= 1 || redFactor < 0) {
       terminate = true;
-      printf("c time to terminate\n");
+      printf("%sc time to terminate\n", getSolverId().c_str());
     } else {
       if (epsilon <= epsthreshold)
         epsilon = 1;
       else
         epsilon = 1 + (epsilon - 1) / redFactor;
-      printf("c REENCODE epsilon = %f\n", epsilon);
+      printf("%sc REENCODE epsilon = %f\n", getSolverId().c_str(), epsilon);
     }
   }
 
   if (nondom.size() > 0) {
 
     if (epsilon <= 1) {
-      printf("c LBset = PF\n");
+      printf("%sc LBset = PF\n", getSolverId().c_str());
       clearLowerBoundSet();
       for (size_t i = 0; i < nondom.size(); i++)
         updateLowerBoundSet(nondom[i], false);
@@ -78,10 +80,10 @@ void PMinimalMO::search_MO() {
       clearLowerBoundSet();
   }
 
-  printf("I am thread %d setting pointer stopSearch (%p) to true\n",
-         omp_get_thread_num(), _stopSearch);
-  _stopSearch->store(true, std::memory_order_release);
-  printAnswer(answerType);
+  requestStopSearch();
+  shareSolutions(true);
+  if (!isInsidePortfolio())
+    printAnswer(answerType);
 }
 
 bool PMinimalMO::searchPMinimalMO() {
@@ -92,27 +94,44 @@ bool PMinimalMO::searchPMinimalMO() {
 
   assumptions.clear();
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    DLOG(stderr,
+         "%sstopSearch has been set to true, another thread requested to "
+         "stop the search. Stopping search now...\n",
+         getSolverId().c_str());
     return false;
   }
 
-  for (auto sat = solve(); sat == l_True; sat = solve()) {
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+  shareClauses();
+  shareSolutions(true);
+  auto sat = solve();
+  while (sat == l_Undef) {
+    if (getStopSearchFlag()) {
+      DLOG(stderr,
+           "%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
+      return false;
+    }
+    shareClauses();
+    shareSolutions(true);
+    sat = solve();
+  }
+  for (; sat == l_True;) {
+    if (getStopSearchFlag()) {
+      DLOG(stderr,
+           "%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
       return false;
     }
 
-    for (; sat == l_True; sat = solve()) {
-      if (_stopSearch->load(std::memory_order_acquire)) {
-        printf(
-            "After checking stopSearch (%p), another thread requested to stop "
-            "the search. Thread %d stopping now...\n",
-            _stopSearch, omp_get_thread_num());
+    for (; sat == l_True;) {
+      if (getStopSearchFlag()) {
+        DLOG(stderr,
+             "%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
         return false;
       }
 
@@ -120,17 +139,54 @@ bool PMinimalMO::searchPMinimalMO() {
       solution().pushSafe(m);
       ul = solution().yPoint();
       blockDominatedRegion(ul);
-      printf("c o ");
-      std::cout << ul << std::endl;
+      std::ostringstream oss;
+      oss << ul;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
+      // printf("%sc o ", getSolverId().c_str());  TODO: check this
+      // std::cout << ul << std::endl;
       runtime = cpuTime();
-      printf("c new feasible solution (time: %.3f)\n", runtime - initialTime);
+      printf("%sc new feasible solution (time: %.3f)\n", getSolverId().c_str(),
+             runtime - initialTime);
       assumptions.clear();
       PBtoCNF::assumeDominatingRegion(ul);
+
+      shareClauses();
+      shareSolutions(true);
+      sat = solve();
+      while (sat == l_Undef) {
+        if (getStopSearchFlag()) {
+          DLOG(stderr,
+               "%sstopSearch has been set to true, another thread requested "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+          return false;
+        }
+        shareClauses();
+        shareSolutions(true);
+        sat = solve();
+      }
     }
     assumptions.clear();
     runtime = cpuTime();
-    printf("c new optimal solution (time: %.3f)\n", runtime - initialTime);
+    printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
+           runtime - initialTime);
     blockDominatedRegion(ul);
+    shareClauses();
+    shareSolutions(true);
+    sat = solve();
+    while (sat == l_Undef) {
+      if (getStopSearchFlag()) {
+        DLOG(stderr,
+             "%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
+        return false;
+      }
+      shareClauses();
+      shareSolutions(true);
+      sat = solve();
+    }
   }
 
   if (solution().size() == 0) {

@@ -47,20 +47,22 @@ void UnsatSatBudgetMO::search_MO() {
   bool resform = buildWorkFormula();
 
   if (resform) {
-    printf("c search\n");
+    printf("%sc search\n", getSolverId().c_str());
     searchUnsatSatMO();
   } else {
-    printf("c No more solutions!\n");
+    printf("%sc No more solutions!\n", getSolverId().c_str());
   }
-  if (_stopSearch->load(std::memory_order_acquire)) {
+  if (getStopSearchFlag()) {
     answerType = _INTERRUPTED_;
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Search stopped.\n",
+           getSolverId().c_str());
+    if (!_stopSearch)
+      printAnswer(answerType);
     return;
   }
 
-  printf("c Done searching\n");
+  printf("%sc Done searching\n", getSolverId().c_str());
   PBtoCNF::consolidateSolution();
   if (solution().size() > 0) {
     answerType = _OPTIMUM_;
@@ -68,10 +70,10 @@ void UnsatSatBudgetMO::search_MO() {
     answerType = _UNSATISFIABLE_;
   }
 
-  printf("I am thread %d setting pointer stopSearch (%p) to true\n",
-         omp_get_thread_num(), _stopSearch);
-  _stopSearch->store(true, std::memory_order_release);
-  printAnswer(answerType);
+  requestStopSearch();
+  shareSolutions(true);
+  if (!_stopSearch)
+    printAnswer(answerType);
 }
 
 bool UnsatSatBudgetMO::rootedSearch(const YPoint &yp) {
@@ -80,7 +82,7 @@ bool UnsatSatBudgetMO::rootedSearch(const YPoint &yp) {
   YPoint ul = yp;
 
 newHarvest:
-  cout << "c new harvest. upperLimit: " << ul << endl;
+  cout << getSolverId() << "c new harvest. upperLimit: " << ul << endl;
   assumptions.clear();
   // reinserts the MSU3 blocked vars
 
@@ -88,45 +90,57 @@ newHarvest:
     assumptions.push(~el);
   assumeDominatingRegion(ul);
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
+  shareClauses();
+  shareSolutions(true);
   while (solve() == l_True) {
-
-    if (_stopSearch->load(std::memory_order_acquire)) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return false;
     }
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
       blockStep(solution().yPoint());
-      printf("c o ");
-      std::cout << solution().yPoint() << std::endl;
+      std::ostringstream oss;
+      oss << solution().yPoint();
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
+      // printf("%sc o ", getSolverId().c_str());
+      // std::cout << solution().yPoint() << std::endl;
+      shareSolutions(true);
       runtime = cpuTime();
-      printf("c new optimal solution (time: %.3f)\n", runtime - initialTime);
+      printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
+             runtime - initialTime);
     } else {
       auto yp = MOCO::evalModel(m);
       for (auto &el : solution()) {
         auto yp1 = el.second.first.yPoint();
         if (pareto::dominates(yp1, yp)) {
           blockStep(yp1);
-          printf("c o ");
-          std::cout << yp1 << std::endl;
-          printf("c old solution (time: %.3f)\n", runtime - initialTime);
+          std::ostringstream oss;
+          oss << yp1;
+          std::osyncstream(std::cout)
+              << getSolverId() << "c o " << oss.str() << "\n";
+          // printf("%sc o ", getSolverId().c_str());
+          // std::cout << yp1 << std::endl;
+          printf("%sc old solution (time: %.3f)\n", getSolverId().c_str(),
+                 runtime - initialTime);
         }
       }
     }
   }
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
   if (extendUL(ul))
@@ -145,11 +159,10 @@ bool UnsatSatBudgetMO::searchUnsatSatMO() {
   if (pareto::dominates(ul, dom))
     ul = dom;
   rootedSearch(ul);
-  if (_stopSearch->load(std::memory_order_acquire)) {
-
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
   if (solution().size() == 0) {
@@ -214,7 +227,24 @@ bool UnsatSatBudgetMO::optimize_core_destructive(vec<Lit> &conflict,
     for (int j = 0; j < n; j++)
       if (j != i)
         assumptions.push(~conflict[j]);
+
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
+      return false;
+    }
+
+    shareClauses();
+    shareSolutions(true);
     if ((sat = solve()) == l_True) {
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
+
       done.insert(x);
       Model m = make_model(solver->model);
       // Only block dominated region if m1 gets into the Solution
@@ -223,21 +253,31 @@ bool UnsatSatBudgetMO::optimize_core_destructive(vec<Lit> &conflict,
         auto sol = solution().oneSolution();
         auto yp = sol.yPoint();
         // create slide variable for newly found solution
-        printf("c o ");
-        std::cout << sol << std::endl;
-        printf("c new satisfiable solution\n");
+        std::ostringstream oss;
+        oss << sol;
+        std::osyncstream(std::cout)
+            << getSolverId() << "c o " << oss.str() << "\n";
+        // printf("%sc o ", getSolverId().c_str());
+        // std::cout << sol << std::endl;
+        printf("%sc new satisfiable solution\n", getSolverId().c_str());
         if (_block)
           blockStep(yp);
         else
-          printf("c solution left unblocked\n");
+          printf("%sc solution left unblocked\n", getSolverId().c_str());
       } else {
         auto yp = MOCO::evalModel(m);
-        printf("c o ");
-        std::cout << yp << std::endl;
-        printf("c old solution\n");
+        std::ostringstream oss;
+        oss << yp;
+
+        std::osyncstream(std::cout)
+            << getSolverId() << "c o " << oss.str() << "\n";
+        // printf("%sc o ", getSolverId().c_str());
+        // std::cout << yp << std::endl;
+        printf("%sc old solution\n", getSolverId().c_str());
       }
     } else if (sat == l_Undef) {
-      cout << "c budget exhausted during core optimization" << endl;
+      cout << getSolverId() << "c budget exhausted during core optimization"
+           << endl;
       answerType = _BUDGET_;
       return false;
     } else {

@@ -15,6 +15,7 @@
 #include "utils/System.h"
 #include <map>
 #include <set>
+#include <syncstream>
 #include <utility>
 
 #define MAXDIM 50

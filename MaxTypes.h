@@ -113,5 +113,7 @@ enum {
 };
 enum { _PART_SEQUENTIAL_ = 0, _PART_SEQUENTIAL_SORTED_, _PART_BINARY_ };
 
+enum { _NO_HEURISTIC_ = 0, _SIZE_HEURISTIC_ };
+
 } // namespace openwbo
 #endif

@@ -27,8 +27,8 @@ EXEC       = open-wbo
 DEPDIR     += mtl utils core
 DEPDIR     +=  ../../encodings ../../algorithms ../../graph ../../classifier ../../analysis ../../debug ../../waiting_list
 MROOT      ?= $(PWD)/solvers/$(SOLVERDIR)
-LFLAGS     += -lgmpxx -lgmp
-CFLAGS     += -Wall -Wno-parentheses -Wno-class-memaccess -std=c++17 -DNSPACE=$(NSPACE) -DSOLVERNAME=$(SOLVERNAME) -DVERSION=$(VERSION) -fopenmp
+LFLAGS     += -lgmpxx -lgmp -fopenmp 
+CFLAGS     += -Wall -Wno-parentheses -Wno-class-memaccess -std=c++20 -DNSPACE=$(NSPACE) -DSOLVERNAME=$(SOLVERNAME) -DVERSION=$(VERSION) -fopenmp -g -Og -fno-inline
 ifeq ($(SANITIZER),asan)
 CFLAGS     += -fsanitize=address
 LFLAGS     += -fsanitize=address
@@ -47,6 +47,9 @@ LFLAGS     += -pthread
 CFLAGS     += -DGLUCORED
 DEPDIR     += reducer glucored
 endif
+endif
+ifeq ($(DDEBUG),1)
+CFLAGS     += -DDEBUG
 endif
 
 # Some solvers do not have a template.mk file any more

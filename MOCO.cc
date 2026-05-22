@@ -72,7 +72,8 @@ void MOCO::printAnswer(int type) {
   }
   if (verbosity > 0 && print)
     printStats();
-  printf("c ---------- OUTPUT ---------------\n");
+  printf("c ---------- OUTPUT (Thread %d) ---------------\n",
+         omp_get_thread_num());
 
   if (type == _UNKNOWN_ && effsols.size() > 0)
     type = _SATISFIABLE_;
@@ -110,6 +111,13 @@ void MOCO::printAnswer(int type) {
     printEffSolutions(false);
     printMyStats();
     printf("s MEMOUT\n");
+    fflush(stdout);
+    break;
+
+  case _INTERRUPTED_:
+    printEffSolutions(false);
+    printMyStats();
+    printf("s INTERRUPTED\n");
     fflush(stdout);
     break;
   default:

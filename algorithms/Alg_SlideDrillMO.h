@@ -17,6 +17,7 @@
 #include "./Alg_ServerMO.h"
 #include "omp.h"
 #include "utils/System.h"
+#include <syncstream>
 #include <utility>
 
 namespace openwbo {

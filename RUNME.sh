@@ -99,7 +99,7 @@ function main(){
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=23 -pbobjf=4 -eps=1  -core_optim=2 \
 			    -apmode=1 -no-cubounds -no-clbounds -conf_budget=$conf_budget -wl_type=$wl_type $instance ;;
 	portfolio)
-#		gdb --args \
+		        # gdb --args \
 	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=29 -pbobjf=4 -eps=1  -core_optim=2 \
 			    -apmode=1 -no-cubounds -no-clbounds $instance $conf_budget ;;
@@ -131,10 +131,11 @@ function mmktemp(){
     # creates tmp file name. Avoids thrashing over existent files
     local result=$(basename $1)
     local n=""
-    while [ -f "/tmp/$n$result" ]; do
+    local tmpdir="${TMPDIR:-/tmp}"
+    while [ -f "$tmpdir/$n$result" ]; do
 	n=$((n+1))
     done
-    echo "/tmp/$n$result"
+    echo "$tmpdir/$n$result"
 }
 
 # live section: 

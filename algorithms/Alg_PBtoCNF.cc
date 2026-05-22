@@ -1131,8 +1131,9 @@ void PBtoCNF::printRootLitModel(int d) {
 StatusCode PBtoCNF::search() {
 
   search_MO();
-  printStats();
-  printf("done\n");
+  if (!isInsidePortfolio())
+    printStats();
+  printf("%sdone\n", getSolverId().c_str());
   // Make sure the conflict budget is turned off.
   solver->budgetOff();
   return answerType;
@@ -1378,6 +1379,7 @@ Solver *PBtoCNF::buildSolverMO() {
     fubs[di] = 0;
   getMaxSATFormula()->sync_first(S);
   encoder.kpa_fixed_vars(getMaxSATFormula()->fixed_vars());
+  _nb_encoded_vars_initial = S->nVars();
   return S;
 }
 
@@ -1614,4 +1616,43 @@ int PBtoCNF::toggleConflictBudget(int limit) {
     return conflict_limit;
   }
   return 0;
+}
+
+void PBtoCNF::shareClauses() {
+  if (!getShareClauses())
+    return;
+
+  std::vector<vec<Lit>> clauses =
+      solver->getLearntClauses(_nb_encoded_vars_initial - 1); // 0-indexed
+  std::vector<vec<Lit>> filteredClauses = sharingHeuristic->filter(clauses);
+  std::vector<vec<Lit>> receivedClauses =
+      sharedLearntClauses->syncSharedClauses(clauses.size(), filteredClauses,
+                                             omp_get_thread_num());
+  solver->addLearntClauses(receivedClauses);
+}
+
+void PBtoCNF::shareSolutions(bool block) {
+  if (!getShareSolutions())
+    return;
+  std::vector<openwbo::Solution::OneSolution> localFront = {};
+
+  for (auto &[_, sol] : solution()) {
+    localFront.push_back(sol.first);
+  }
+
+  std::vector<openwbo::Solution::OneSolution> receivedFront =
+      sharedSolutions->syncSolutions(localFront, omp_get_thread_num(), block);
+  for (auto &sol : receivedFront) {
+    blockDominatedRegion(sol.yPoint());
+  }
+}
+
+void PBtoCNF::setMyOutputFiles(const char *file) {
+  MOCO::setMyOutputFiles(file);
+  if (file != NULL) {
+    clause_sharing_stats_file = getFilename(file, ".clsshr.stats");
+    printf("c clause_sharing_stats_file saved to: %s\n",
+           clause_sharing_stats_file);
+    print_my_output = true;
+  }
 }

@@ -10,9 +10,14 @@
 
 #include "../Encoder.h"
 
+#include "../DebugLog.h"
 #include "../MOCO.h"
 #include "../Pareto.h"
+#include "../clausesharing/IClauseSharingHeuristic.h"
+#include "../clausesharing/ISharedClausesBag.h"
 #include "../encodings/RootLits.h"
+#include "../solutionsharing/ISharedSolutionsSet.h"
+#include "../solutionsharing/SharedSolutionsVector.h"
 #include "omp.h"
 #include "utils/System.h"
 #include <atomic>
@@ -28,6 +33,7 @@ namespace openwbo {
 class PBtoCNF : public MOCO {
   friend class debug::PBtoCNF_debugger;
   friend class PortfolioMO;
+  friend class PBtoCNFMasterMO;
 
 public:
   using rootLits_t = std::shared_ptr<rootLits::RootLitsInt>;
@@ -36,8 +42,8 @@ public:
   PBtoCNF(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
           int strategy = _WEIGHT_NONE_,
           // int limit = INT32_MAX,
-          int enc = _CARD_MTOTALIZER_, int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
-          std::atomic<bool> *stopSearch = nullptr) {
+          int enc = _CARD_MTOTALIZER_, int pb = _PB_SWC_,
+          int pbobjf = _PB_GTE_) {
     solver = NULL;
     verbosity = verb;
 
@@ -65,6 +71,7 @@ public:
     encoder.setPBEncoding(pbobjf);
     answerType = _UNKNOWN_;
     nreencodes = 0;
+    _nb_encoded_vars_initial = 0;
   }
   // wrapper of init and buildSolverMO
   virtual void build();
@@ -97,12 +104,49 @@ public:
     return _smallestMCS;
   }
 
-  virtual void setStopSearchFlag(std::atomic<bool> *stopSearch) {
+  virtual void
+  setStopSearchFlag(std::shared_ptr<std::atomic<bool>> stopSearch) {
     _stopSearch = stopSearch;
   }
 
-  std::atomic<bool> *getStopSearchFlag() { return _stopSearch; }
+  bool getStopSearchFlag() { return _stopSearch && _stopSearch->load(); }
 
+  void requestStopSearch() {
+    if (_stopSearch) {
+      DLOG(stderr, "I am thread %d setting pointer stopSearch (%p) to true\n",
+           omp_get_thread_num(), _stopSearch.get());
+      _stopSearch->store(true);
+    }
+  }
+
+  virtual void
+  setClausesBag(std::shared_ptr<clausesharing::ISharedClausesBag> bag) {
+    sharedLearntClauses = bag;
+  }
+
+  virtual void interruptSolver() { solver->interrupt(); }
+
+  virtual void setSharedSolutionsSet(
+      std::shared_ptr<solutionsharing::ISharedSolutionsSet> solutionSet) {
+    sharedSolutions = solutionSet;
+  }
+
+  virtual void setShareClauses(bool share) { _shareClauses = share; }
+  bool getShareClauses() { return _shareClauses; }
+
+  virtual void setShareSolutions(bool share) { _shareSolutions = share; }
+
+  bool getShareSolutions() { return _shareSolutions; }
+
+  virtual void
+  setClauseSharingHeuristic(clausesharing::IClauseSharingHeuristic *heuristic) {
+    sharingHeuristic =
+        std::unique_ptr<clausesharing::IClauseSharingHeuristic>(heuristic);
+  }
+
+  std::vector<vec<Lit>> filterClauses(const std::vector<vec<Lit>> &clauses) {
+    return sharingHeuristic->filter(clauses);
+  }
   void updateStats() override;
   // MO part encodes objective functions. Overwrites objRootLits
   void updateMOEncoding();
@@ -134,6 +178,14 @@ public:
 
   bool apObjectivesAreExact();
 
+  void setMyOutputFiles(const char *file) override;
+
+  void applyBlockDominatedRegion(
+      const YPoint &yp) { // A public wrapper for blockDominatedRegion. Used by
+                          // HittingSetsMO.
+    blockDominatedRegion(yp);
+  }
+
 protected:
   // Rebuild MaxSAT solver
   //
@@ -151,7 +203,7 @@ protected:
   // sort. Assumes formula was loaded. Initializes the objRootLits
   // vector. Initializes variables to be used to implement soft
   // clauses.
-  void init();
+  virtual void init();
 
   void initUndefClauses(vec<int> &undefClauses);
 
@@ -173,7 +225,7 @@ protected:
   //
   void printModel();         // Print the last model.
   void printSmallestModel(); // Print the best satisfying model.
-  void printStats();         // Print search statistics.
+  virtual void printStats(); // Print search statistics.
 
   // Other utils
   bool satisfiedSoft(int i);
@@ -190,7 +242,7 @@ protected:
   void tmpBlockDominatedRegion(uint64_t *objix, int nObj, Lit tmplit);
   void tmpBlockDominatedRegion(const YPoint &yp, Lit tmplit);
   void blockDominatedRegion(uint64_t *objix, int nObj);
-  void blockDominatedRegion(const YPoint &yp);
+  virtual void blockDominatedRegion(const YPoint &yp);
   void assumeDominatingRegion(uint64_t *objix, int nObj);
   virtual int assumeDominatingRegion(const YPoint &yp);
   void activateLit(Lit tmplit);
@@ -204,6 +256,17 @@ protected:
 
   void update_assumpt_n_mcs(Lit mcsesBlockLit, uint64_t *objix,
                             uint64_t *lastobjix, int nObj);
+
+  void shareClauses();
+  void shareSolutions(bool block);
+  bool isInsidePortfolio() {
+    return _stopSearch || _shareClauses || _shareSolutions;
+  }
+  std::string getSolverId() {
+    return isInsidePortfolio()
+               ? "[s" + std::to_string(omp_get_thread_num()) + "] "
+               : "";
+  }
 
 protected:
   // ------------------------------------------------------------------- //
@@ -301,7 +364,15 @@ protected:
   Solution::OneSolution first{};
   int nreencodes;
 
-  std::atomic<bool> *_stopSearch;
+  // Parallel MOCO-support
+  size_t _nb_encoded_vars_initial;
+  std::shared_ptr<std::atomic<bool>> _stopSearch;
+  bool _shareClauses = false;
+  bool _shareSolutions = false;
+  std::shared_ptr<clausesharing::ISharedClausesBag> sharedLearntClauses;
+  std::unique_ptr<clausesharing::IClauseSharingHeuristic> sharingHeuristic;
+  std::shared_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
+  char *clause_sharing_stats_file;
 };
 void evalToIndex(const YPoint &yp, uint64_t *objix,
                  std::vector<PBtoCNF::rootLits_t> &objRootLits);

@@ -503,6 +503,11 @@ void MaxSAT::printAnswer(int type) {
     printf("s MEMOUT\n");
     fflush(stdout);
     break;
+
+  case _INTERRUPTED_:
+    printf("s INTERRUPTED\n");
+    fflush(stdout);
+    break;
   default:
     printf("c Error: Invalid answer type.\n");
   }

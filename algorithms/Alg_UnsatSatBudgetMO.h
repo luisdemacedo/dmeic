@@ -21,6 +21,7 @@
 #include "utils/System.h"
 #include <algorithm> // std::max
 #include <random>
+#include <syncstream>
 #include <utility>
 
 #define MAXDIM 50

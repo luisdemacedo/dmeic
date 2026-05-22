@@ -12,10 +12,10 @@ bool UnsatSatIncHSMO::searchUnsatSatMO() {
     rootedSearch(ul);
   }
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     answerType = _INTERRUPTED_;
     return false;
   }
@@ -31,13 +31,13 @@ bool UnsatSatIncHSMO::searchUnsatSatMO() {
 }
 
 bool UnsatSatIncHSMO::rootedSearch(const YPoint &yp) {
-  cout << "c rooted search\n";
+  cout << getSolverId() << "c rooted search\n";
   double runtime = cpuTime();
   lbool sat{};
   YPoint ul = yp;
 
 newHarvest:
-  cout << "c new harvest. upperLimit: " << ul << endl;
+  cout << getSolverId() << "c new harvest. upperLimit: " << ul << endl;
   // block blocked vars. For instance, when doing a MSU3 search
   assumptions.clear();
   for (const auto &el : blockedVars)
@@ -47,19 +47,18 @@ newHarvest:
     assumptions.push(Glucose::mkLit(el.second.second, false));
   assumeDominatingRegion(ul);
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
 
   while ((sat = solve()) == l_True) {
-
-    if (_stopSearch->load(std::memory_order_acquire)) {
+    if (getStopSearchFlag()) {
       printf("After checking stopSearch (%p), another thread requested to stop "
              "the search. Thread %d stopping now...\n",
-             _stopSearch, omp_get_thread_num());
+             _stopSearch.get(), omp_get_thread_num());
       return false;
     }
 
@@ -72,28 +71,38 @@ newHarvest:
       auto yp = solution().yPoint();
       // update soft variables that are still relevant
       runtime = cpuTime();
-      cout << "c o " << yp << endl;
-      printf("c new inner optimal solution (time: %.3f)\n",
-             runtime - initialTime);
+      // cout << getSolverId() << "c o " << yp << endl;
+    std:
+      ostringstream oss;
+      oss << yp;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
+      printf("%sc new inner optimal solution (time: %.3f)\n",
+             getSolverId().c_str(), runtime - initialTime);
     } else {
       auto one = Solution::OneSolution{&solution(), m};
-      cout << "c o " << one.yPoint() << endl;
+      std::ostringstream oss;
+      oss << one.yPoint();
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
+      // cout << getSolverId() << "c o " << one.yPoint() << endl;
       runtime = cpuTime();
-      printf("c new non-optimal solution (time: %.3f)\n",
-             runtime - initialTime);
+      printf("%sc new non-optimal solution (time: %.3f)\n",
+             getSolverId().c_str(), runtime - initialTime);
     }
   }
   if (sat == l_Undef) {
     marker = ul;
-    std::cout << "budget exhausted while dealing with ul =  " << marker
+    std::cout << getSolverId()
+              << "budget exhausted while dealing with ul =  " << marker
               << std::endl;
     return false;
   }
 
-  if (_stopSearch->load(std::memory_order_acquire)) {
+  if (getStopSearchFlag()) {
     printf("After checking stopSearch (%p), another thread requested to stop "
            "the search. Thread %d stopping now...\n",
-           _stopSearch, omp_get_thread_num());
+           _stopSearch.get(), omp_get_thread_num());
     return false;
   }
 
@@ -139,9 +148,9 @@ void UnsatSatIncHSMO::checkSols() {
     it = solution().remove(it);
   }
 
-  std::cout << "c lower bound: " << lowerBound.size() << endl;
+  std::cout << getSolverId() << "c lower bound: " << lowerBound.size() << endl;
   for (auto &el : lowerBound)
-    std::cout << "c " << el.second.first.yPoint() << endl;
+    std::cout << getSolverId() << "c " << el.second.first.yPoint() << endl;
 }
 void UnsatSatIncHSMO::incrementSlice(const partition::MyPartition::part_t &p) {
   int i = 0;
