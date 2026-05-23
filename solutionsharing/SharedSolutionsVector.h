@@ -12,6 +12,7 @@
 #include "ISharedSolutionsSet.h"
 #include <mutex>
 #include <vector>
+
 using NSPACE::Lit;
 using NSPACE::vec;
 
@@ -51,32 +52,38 @@ public:
          omp_get_thread_num());
 
     std::vector<openwbo::Solution::OneSolution> result = {};
-    std::vector<openwbo::Solution::OneSolution> toAdd = {};
+    std::vector<TaggedSolution> toAdd = {};
+    std::vector<bool> toRemove(sharedSolutions.size(), false);
+
     for (const auto &c : candidates) {
-      if (std::any_of(sharedSolutions.begin(), sharedSolutions.end(),
-                      [&](const TaggedSolution &tsSol) {
-                        openwbo::Solution::OneSolution ySol = tsSol.sol;
-                        openwbo::Solution::OneSolution cCopy = c;
-                        return ySol.yPoint() == cCopy.yPoint() ||
-                               pareto::dominates(ySol.yPoint(), cCopy.yPoint());
-                      }))
+      openwbo::Solution::OneSolution cCopy = c;
+      const auto &cYPoint = cCopy.yPoint();
+      bool skip = false;
+      for (size_t i = 0; i < sharedSolutions.size(); ++i) {
+        auto &taggedSol = sharedSolutions[i];
+        auto &tsSol = taggedSol.sol;
+        auto &sYPoint = tsSol.yPoint();
+
+        if (sYPoint == cYPoint || pareto::dominates(sYPoint, cYPoint)) {
+          skip = true;
+          break;
+        } else if (pareto::dominates(cYPoint, sYPoint)) {
+          toRemove[i] = true;
+        }
+      }
+      if (skip)
         continue;
 
-      std::erase_if(sharedSolutions, [&](const TaggedSolution &tsSol) {
-        openwbo::Solution::OneSolution ySol = tsSol.sol;
-        openwbo::Solution::OneSolution cCopy = c;
-        return pareto::dominates(cCopy.yPoint(), ySol.yPoint());
-      });
-
-      toAdd.push_back(c);
+      toAdd.push_back({cCopy, lastUpdateTime, thread_id});
     }
+
     for (const auto &tsSol : sharedSolutions)
       if (solverTimestamps[thread_id] < tsSol.ts)
         result.push_back(tsSol.sol);
 
-    for (const auto &c : toAdd)
-      sharedSolutions.push_back({c, lastUpdateTime, thread_id});
-
+    size_t i = 0;
+    std::erase_if(sharedSolutions, [&](const auto &) { return toRemove[i++]; });
+    sharedSolutions.insert(sharedSolutions.end(), toAdd.begin(), toAdd.end());
     solverTimestamps[thread_id] = lastUpdateTime++;
 
     auto t_copy = clock::now();
@@ -108,7 +115,8 @@ public:
     DLOG(stderr,
          "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
          "snapshot: %lld ms, "
-         "candidates: %zu, shared: %zu, pulled: %zu, pushed: %zu\n",
+         "candidates: %zu, already shared: %zu, pulled: %zu, pushed: "
+         "%zu\n",
          omp_get_thread_num(),
          static_cast<long long>(
              std::chrono::duration_cast<std::chrono::milliseconds>(callSyncTime)
