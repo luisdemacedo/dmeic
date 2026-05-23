@@ -136,7 +136,7 @@ public:
                  .count()),
          candidates.size(),
          sharedSolutions.size() +
-             std::count(toRemove.begin(), toRemove.end(), true),
+             std::count(toRemove.begin(), toRemove.end(), true) - toAdd.size(),
          sharedSolutions.size(), result.size(), toAdd.size());
     return result;
   }
