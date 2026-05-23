@@ -10,6 +10,7 @@
 #include "../MOCO.h"
 #include "../Pareto.h"
 #include "ISharedSolutionsSet.h"
+#include <algorithm>
 #include <mutex>
 #include <vector>
 
@@ -115,7 +116,8 @@ public:
     DLOG(stderr,
          "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
          "snapshot: %lld ms, "
-         "candidates: %zu, already shared: %zu, pulled: %zu, pushed: "
+         "candidates: %zu, already shared (before): %zu, already shared "
+         "(after): %zu, pulled: %zu, pushed: "
          "%zu\n",
          omp_get_thread_num(),
          static_cast<long long>(
@@ -132,8 +134,10 @@ public:
              std::chrono::duration_cast<std::chrono::milliseconds>(
                  callSnapshotCreationTime)
                  .count()),
-         candidates.size(), sharedSolutions.size(), result.size(),
-         toAdd.size());
+         candidates.size(),
+         sharedSolutions.size() +
+             std::count(toRemove.begin(), toRemove.end(), true),
+         sharedSolutions.size(), result.size(), toAdd.size());
     return result;
   }
 
