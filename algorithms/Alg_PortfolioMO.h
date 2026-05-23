@@ -56,7 +56,7 @@ public:
     for (auto &solver : _portfolio)
       solver->setStopSearchFlag(_stopSearch);
 
-    sharedSolutions = std::make_shared<solutionsharing::SharedSolutionVector>(
+    sharedSolutions = std::make_shared<solutionsharing::SharedSolutionsVector>(
         _portfolio.size());
     setSharedSolutionsSet(sharedSolutions);
   }

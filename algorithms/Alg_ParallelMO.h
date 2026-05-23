@@ -17,6 +17,8 @@
 #include <set>
 #include <utility>
 
+#include "../encodings/RootLits.h"
+
 #define MAXDIM 50
 
 namespace openwbo {
@@ -24,6 +26,7 @@ namespace openwbo {
 class ParallelMO : public MOCO {
 
 public:
+  using rootLits_t = std::shared_ptr<rootLits::RootLitsInt>;
   ParallelMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
              int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
              int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
@@ -45,10 +48,26 @@ public:
   // StatusCode search() override;
 
   void printStats();
+  void init();
 
 protected:
   size_t num_workers = omp_get_max_threads(); // TODO: make this a parameter
   std::vector<Solver *> solvers;
+
+  // Options
+  bool _useAllVars;
+
+  // MCS Management
+  uint64_t _maxWeight;
+
+  // Quasi-Bones
+  vec<int> _soft_variables;
+  vec<int> _assigned_true;
+  vec<float> _varScore;
+
+  // MO support
+  std::vector<rootLits_t>
+      objRootLits{}; // (value, lit). lit => f < value, ~(f >= value)
 };
 } // namespace openwbo
 

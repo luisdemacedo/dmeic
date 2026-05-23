@@ -1,5 +1,5 @@
-#ifndef ISHARED_SOLUTIONS_VECTOR_H
-#define ISHARED_SOLUTIONS_VECTOR_H
+#ifndef ISHARED_SOLUTIONS_VECTOR_W_SNAPSHOT_H
+#define ISHARED_SOLUTIONS_VECTOR_W_SNAPSHOT_H
 
 #ifdef SIMP
 #include "simp/SimpSolver.h"
@@ -24,15 +24,17 @@ struct TaggedSolution {
   size_t added_by_thread;
 };
 
-class SharedSolutionsVector : public ISharedSolutionsSet {
+class SharedSolutionsVectorWSnapshot : public ISharedSolutionsSet {
   using clock = std::chrono::steady_clock;
 
 public:
-  SharedSolutionsVector(size_t numSolvers) : solverTimestamps(numSolvers, 0) {
+  SharedSolutionsVectorWSnapshot(size_t numSolvers)
+      : solverTimestamps(numSolvers, 0) {
     solutionsPushedByThread.resize(numSolvers);
     solutionsPulledByThread.resize(numSolvers);
     syncTimeByThread.resize(numSolvers);
     lockWaitTimeByThread.resize(numSolvers);
+    snapshotCreationTimeByThread.resize(numSolvers);
   }
 
   virtual std::vector<openwbo::Solution::OneSolution>
@@ -86,6 +88,13 @@ public:
     sharedSolutions.insert(sharedSolutions.end(), toAdd.begin(), toAdd.end());
     solverTimestamps[thread_id] = lastUpdateTime++;
 
+    auto t_copy = clock::now();
+    std::vector<TaggedSolution> newSnapshot = sharedSolutions;
+    auto t_copy_end = clock::now();
+
+    std::unique_lock<std::mutex> snapshotLock(snapshotMutex);
+    snapshotSolutions = std::move(newSnapshot);
+
     auto t_end = clock::now();
 
     auto callSyncTime =
@@ -93,16 +102,21 @@ public:
     auto callLockWaitTime =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t_lock_acquired -
                                                              t_start);
+    auto callSnapshotCreationTime =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t_copy_end -
+                                                             t_copy);
     auto callHeldTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
         t_end - t_lock_acquired);
 
     syncTimeByThread[thread_id] += callSyncTime;
     lockWaitTimeByThread[thread_id] += callLockWaitTime;
+    snapshotCreationTimeByThread[thread_id] += callSnapshotCreationTime;
     solutionsPushedByThread[thread_id] += toAdd.size();
     solutionsPulledByThread[thread_id] += result.size();
 
     DLOG(stderr,
          "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
+         "snapshot: %lld ms, "
          "candidates: %zu, already shared (before): %zu, already shared "
          "(after): %zu, pulled: %zu, pushed: "
          "%zu\n",
@@ -117,6 +131,10 @@ public:
          static_cast<long long>(
              std::chrono::duration_cast<std::chrono::milliseconds>(callHeldTime)
                  .count()),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(
+                 callSnapshotCreationTime)
+                 .count()),
          candidates.size(),
          sharedSolutions.size() +
              std::count(toRemove.begin(), toRemove.end(), true) - toAdd.size(),
@@ -127,15 +145,27 @@ public:
   virtual std::vector<std::pair<size_t, openwbo::Solution::OneSolution>>
   getSolutions() override {
     std::vector<std::pair<size_t, openwbo::Solution::OneSolution>> result;
-    // Ignoring lock acquisition
-    for (const auto &tsSol : sharedSolutions)
-      result.push_back(std::make_pair(tsSol.added_by_thread, tsSol.sol));
+    std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
+    if (!lock.try_lock()) {
+      DLOG(stderr,
+           "[s%d] Could not acquire lock to get solutions, returning "
+           "snapshot.\n",
+           omp_get_thread_num());
+      std::unique_lock<std::mutex> snapshotLock(snapshotMutex);
+      for (const auto &tsSol : snapshotSolutions)
+        result.push_back(std::make_pair(tsSol.added_by_thread, tsSol.sol));
+    } else {
+      for (const auto &tsSol : sharedSolutions)
+        result.push_back(std::make_pair(tsSol.added_by_thread, tsSol.sol));
+    }
     return result;
   }
 
 private:
   std::vector<TaggedSolution> sharedSolutions;
+  std::vector<TaggedSolution> snapshotSolutions;
   std::mutex mutex;
+  std::mutex snapshotMutex;
   size_t lastUpdateTime = 0;
   std::vector<size_t> solverTimestamps;
 };
