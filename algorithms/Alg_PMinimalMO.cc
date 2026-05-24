@@ -84,6 +84,8 @@ void PMinimalMO::search_MO() {
   shareSolutions(true);
   if (!isInsidePortfolio())
     printAnswer(answerType);
+  if (getStopSearchFlag())
+    exit(answerType);
 }
 
 bool PMinimalMO::searchPMinimalMO() {

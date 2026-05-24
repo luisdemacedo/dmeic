@@ -45,7 +45,7 @@ public:
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
-        if (!_stopSearch)
+        if (!isInsidePortfolio())
           printAnswer(answerType);
         return;
       }
@@ -55,8 +55,10 @@ public:
 
     requestStopSearch();
     shareSolutions(true);
-    if (!_stopSearch)
+    if (!isInsidePortfolio())
       printAnswer(answerType);
+    if (getStopSearchFlag())
+      exit(answerType);
   }
 
   StatusCode searchMasterMO() {

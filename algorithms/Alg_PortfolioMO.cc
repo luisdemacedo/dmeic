@@ -192,8 +192,7 @@ void PortfolioMO::printStats() {
             sharedSolutions->getSolutionsPushed(idx),
             sharedSolutions->getSolutionsPulled(idx),
             static_cast<long long>(syncTime.count()),
-            static_cast<long long>(lockWaitTime.count())
-);
+            static_cast<long long>(lockWaitTime.count()));
   }
 }
 

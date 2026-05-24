@@ -57,7 +57,7 @@ void UnsatSatBudgetMO::search_MO() {
     printf("%sstopSearch has been set to true, another thread requested to "
            "stop the search. Search stopped.\n",
            getSolverId().c_str());
-    if (!_stopSearch)
+    if (!isInsidePortfolio())
       printAnswer(answerType);
     return;
   }
@@ -72,8 +72,10 @@ void UnsatSatBudgetMO::search_MO() {
 
   requestStopSearch();
   shareSolutions(true);
-  if (!_stopSearch)
+  if (!isInsidePortfolio())
     printAnswer(answerType);
+  if (getStopSearchFlag())
+    exit(answerType);
 }
 
 bool UnsatSatBudgetMO::rootedSearch(const YPoint &yp) {
