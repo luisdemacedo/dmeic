@@ -82,10 +82,10 @@ void PMinimalMO::search_MO() {
 
   requestStopSearch();
   shareSolutions(true);
-  if (!isInsidePortfolio())
+  if (!isInsidePortfolio() || !getShareSolutions()) {
     printAnswer(answerType);
-  if (getStopSearchFlag())
     exit(answerType);
+  }
 }
 
 bool PMinimalMO::searchPMinimalMO() {

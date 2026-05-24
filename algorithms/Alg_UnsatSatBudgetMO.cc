@@ -72,10 +72,10 @@ void UnsatSatBudgetMO::search_MO() {
 
   requestStopSearch();
   shareSolutions(true);
-  if (!isInsidePortfolio())
+  if (!isInsidePortfolio() || !getShareSolutions()){
     printAnswer(answerType);
-  if (getStopSearchFlag())
     exit(answerType);
+  }
 }
 
 bool UnsatSatBudgetMO::rootedSearch(const YPoint &yp) {
