@@ -179,25 +179,21 @@ void PortfolioMO::printStats() {
           sharedLearntClauses->getLargestGrab(),
           sharedLearntClauses->getMostClausesInBag());
 
-  fprintf(f, "csolutionsharingstats %20s %20s %24s %24s %24s\n", "nsols_pushed",
-          "nsols_grabbed", "time_spent_syncing (ms)", "time_waiting_lock (ms)",
-          "time_doing_snapshot (ms)");
+  fprintf(f, "csolutionsharingstats %20s %20s %24s %24s\n", "nsols_pushed",
+          "nsols_grabbed", "time_spent_syncing (ms)", "time_waiting_lock (ms)");
 
   for (size_t idx = 0; idx < _portfolio.size(); idx++) {
     auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
         sharedSolutions->getSyncTime(idx));
     auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
         sharedSolutions->getLockWaitTime(idx));
-    auto snapshotCreationTime =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            sharedSolutions->getSnapshotCreationTime(idx));
-    fprintf(f, "%-20s %20zu %20zu %24lld %24lld %24lld\n",
+    fprintf(f, "%-20s %20zu %20zu %24lld %24lld\n",
             ("solver" + std::to_string(idx)).c_str(),
             sharedSolutions->getSolutionsPushed(idx),
             sharedSolutions->getSolutionsPulled(idx),
             static_cast<long long>(syncTime.count()),
-            static_cast<long long>(lockWaitTime.count()),
-            static_cast<long long>(snapshotCreationTime.count()));
+            static_cast<long long>(lockWaitTime.count())
+);
   }
 }
 
