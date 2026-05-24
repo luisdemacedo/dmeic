@@ -185,12 +185,11 @@ void MOCO::printEffSolutions(bool printLBset) {
   printf("c ------- \n");
   printf("c pts of transformed prob\n");
   for (size_t i = 0; i < nondom.size(); i++) {
-    printf("c pt");
+    std::string line = "c pt";
     for (int di = 0; di < d; di++) {
-      printf(" %ld",
-             nondom[i][di]); // + maxsat_formula->getObjFunction(di)->_const);
+      line += " " + std::to_string(nondom[i][di]);
     }
-    printf("\n");
+    printf("%s\n", line.c_str());
   }
   printf("c ------- \n");
   printf("c %lu points T\n", nondom.size());
