@@ -56,9 +56,9 @@ newHarvest:
 
   while ((sat = solve()) == l_True) {
     if (getStopSearchFlag()) {
-      printf("After checking stopSearch (%p), another thread requested to stop "
-             "the search. Thread %d stopping now...\n",
-             _stopSearch.get(), omp_get_thread_num());
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
       return false;
     }
 
@@ -100,9 +100,9 @@ newHarvest:
   }
 
   if (getStopSearchFlag()) {
-    printf("After checking stopSearch (%p), another thread requested to stop "
-           "the search. Thread %d stopping now...\n",
-           _stopSearch.get(), omp_get_thread_num());
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
     return false;
   }
 
