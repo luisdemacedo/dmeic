@@ -45,8 +45,6 @@ public:
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
-        if (!isInsidePortfolio())
-          printAnswer(answerType);
         return;
       }
 
@@ -55,7 +53,7 @@ public:
 
     requestStopSearch();
     shareSolutions(true);
-    if (!isInsidePortfolio() || !getShareSolutions()){
+    if (!isInsidePortfolio() || !getShareSolutions()) {
       printAnswer(answerType);
       exit(answerType);
     }

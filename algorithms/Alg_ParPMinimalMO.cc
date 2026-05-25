@@ -7,7 +7,7 @@ using NSPACE::toLit;
 
 void ParPMinimalMO::search_MO() {
   // Init Structures
-  // init();
+  init();
 
   //     printf("\t\tc strategic_search\n");
   //     printf("c eps: %f\n", epsilon);
@@ -15,37 +15,39 @@ void ParPMinimalMO::search_MO() {
   // Build solver
   // double epsthreshold = 1 + 1e-4;
 
-  // solver = buildSolverMO();
+  solvers = buildSolversMO(
+      omp_get_max_threads()); // TODO: maybe make this a parameter
 
-  // bool resform, terminate = false;
-  // nbMCS = 0;
+  bool resform, terminate = false;
+  nbMCS = 0;
 
-  // answerType = _UNKNOWN_;
+  answerType = _UNKNOWN_;
 
-  // bool permanentBlock = false;
+  bool permanentBlock = false;
 
   while (!terminate) {
     // encode obj functions
 
-    // resform = updateMOFormulationIfSAT();
-    //
-    // if (resform) {
-    //
-    //   printf("%sc search\n", getSolverId().c_str());
-    //   searchPMinimalMO();
-    //   if (getStopSearchFlag()) {
-    //     answerType = _INTERRUPTED_;
-    //     DLOG(stderr,
-    //          "%sstopSearch has been set to true, another thread requested to
-    //          " "stop the search. Search stopped.\n", getSolverId().c_str());
-    //     if (!isInsidePortfolio())
-    //       printAnswer(answerType);
-    //     return;
-    //   }
-    //
-    // } else {
-    //   printf("%sc No more solutions!\n", getSolverId().c_str());
-    // }
+    resform = updateMOFormulationIfSAT();
+
+    if (resform) {
+      //
+      //   printf("%sc search\n", getSolverId().c_str());
+      //   searchPMinimalMO();
+      //   if (getStopSearchFlag()) {
+      //     answerType = _INTERRUPTED_;
+      //     DLOG(stderr,
+      //          "%sstopSearch has been set to true, another thread requested
+      //          to " "stop the search. Search stopped.\n",
+      //          getSolverId().c_str());
+      //     if (!isInsidePortfolio())
+      //       printAnswer(answerType);
+      //     return;
+      //   }
+      //
+    } else {
+      printf("c No more solutions!\n");
+    }
     // printf("%sc Done searching\n", getSolverId().c_str());
     // printf("%sc epsilon: %f\n", getSolverId().c_str(), epsilon);
     // printf("%sc reductionFactor: %f\n", getSolverId().c_str(), redFactor);

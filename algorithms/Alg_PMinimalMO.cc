@@ -43,8 +43,6 @@ void PMinimalMO::search_MO() {
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
-        if (!isInsidePortfolio())
-          printAnswer(answerType);
         return;
       }
 

@@ -31,9 +31,7 @@ public:
              int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
              int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
              int apmode = encoding::_ap_outvars_, float eps = 1,
-             int searchStrat = 3, float redFact = -1) {
-    solvers = buildSolversMO(num_workers);
-  }
+             int searchStrat = 3, float redFact = -1) {}
 
   ~ParallelMO() {}
 
@@ -48,14 +46,18 @@ public:
   // StatusCode search() override;
 
   void printStats();
+  bool updateMOFormulationIfSAT();
+  bool updateMOFormulation();
   void init();
 
 protected:
-  size_t num_workers = omp_get_max_threads(); // TODO: make this a parameter
   std::vector<Solver *> solvers;
 
   // Options
   bool _useAllVars;
+
+  // Statistics
+  int nbMCS;
 
   // MCS Management
   uint64_t _maxWeight;
@@ -68,6 +70,8 @@ protected:
   // MO support
   std::vector<rootLits_t>
       objRootLits{}; // (value, lit). lit => f < value, ~(f >= value)
+
+  StatusCode answerType;
 };
 } // namespace openwbo
 

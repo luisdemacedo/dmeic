@@ -44,3 +44,19 @@ void ParallelMO::init() { // Copied from PBtoCNF
     objRootLits.push_back(
         std::make_shared<rootLits::RootLits>(rootLits::RootLits{}));
 }
+
+bool ParallelMO::updateMOFormulationIfSAT() {
+  printf("c [updateMOFormulationIfSAT]\n");
+  //     solver->my_print();
+
+  // if (!firstSolution())
+  //   return false;
+  // updateMOFormulation();
+  return true;
+}
+
+bool ParallelMO::updateMOFormulation() {
+
+  return true; // TODO: implement the update of the MO formulation after finding
+               // a solution
+}
