@@ -502,6 +502,8 @@ std::vector<PBtoCNF *> createPortfolio(const char *filename) {
       for (char *p : params)
         free(p);
       params.clear();
+      params.push_back(
+          strdup("dummy")); // Parse options skip the first argument
 
       continue;
     }
