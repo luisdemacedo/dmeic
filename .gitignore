@@ -3,3 +3,6 @@ compile_commands.json
 instances
 portfolio.config
 runsolver
+*.o
+*.mk
+open-wbo
