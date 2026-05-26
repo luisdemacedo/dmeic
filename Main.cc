@@ -493,10 +493,11 @@ std::vector<PBtoCNF *> createPortfolio(const char *filename) {
       solvers.back()->setClauseSharingHeuristic(
           new clausesharing::SizeHeuristic());
 
-      if (options::conf_budget != -1) {
-        solvers.back()->setConflictLimit(options::conf_budget);
-        options::conf_budget = -1;
-      }
+      // if (options::conf_budget != -1) {
+      //   solvers.back()->setConflictLimit(options::conf_budget); TODO: allow
+      //   conflict budget per solver in the config file options::conf_budget =
+      //   -1;
+      // }
 
       params_count = 0;
       for (char *p : params)
