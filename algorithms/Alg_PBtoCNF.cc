@@ -1221,50 +1221,172 @@ void PBtoCNF::printSmallestModel() {
 void PBtoCNF::printStats() {
   // double totalTime = cpuTime();
 
-  printf("c\n");
-  // printf("c  Best solution:          %12"PRIu64"\n", ubCost);
-  // printf("c  Total time:             %12.2f s\n",totalTime - initialTime);
-  printf("c  Nb SAT solver calls:    %12d\n", nbSatCalls);
-  printf("c  Nb SAT calls:           %12d\n", nbSatisfiable);
-  printf("c  Nb UNSAT calls:         %12d\n", nbSatCalls - nbSatisfiable);
-  printf("c  Nb MCS:                 %12d\n", nbMCS);
-  printf("c  Smallest MCS:           %12ld\n", _smallestMCS);
-  printf("c  Lower Bound:            %12ld\n", _lbWeight);
-  // printf("c  Average core size:      %12.2f\n", (float)sumSizeCores/nbCores);
-  printf("c\n");
+  FILE *f = stdout;
+  if (!isInsidePortfolio() || !getShareSolutions()) {
+    fprintf(f, "%sc\n", getSolverId().c_str());
+    // fprintf(f, " c  Best solution:          %12"PRIu64"\n", ubCost);
+    // fprintf(f, " c  Total time:             %12.2f s\n",totalTime -
+    // initialTime);
+    fprintf(f, "%sc  Nb SAT solver calls:    %12d\n", getSolverId().c_str(),
+            nbSatCalls);
+    fprintf(f, "%sc  Nb SAT calls:           %12d\n", getSolverId().c_str(),
+            nbSatisfiable);
+    fprintf(f, "%sc  Nb UNSAT calls:         %12d\n", getSolverId().c_str(),
+            nbSatCalls - nbSatisfiable);
+    fprintf(f, "%sc  Nb MCS:                 %12d\n", getSolverId().c_str(),
+            nbMCS);
+    fprintf(f, "%sc  Smallest MCS:           %12ld\n", getSolverId().c_str(),
+            _smallestMCS);
+    fprintf(f, "%sc  Lower Bound:            %12ld\n", getSolverId().c_str(),
+            _lbWeight);
+    // fprintf("f, c  Average core size:      %12.2f\n",
+    // (float)sumSizeCores/nbCores);
+    fprintf(f, "%sc\n", getSolverId().c_str());
+  }
+
+  if (getShareClauses()) {
+    fprintf(f, "cclausesharingstats %20s %20s %20s %20s %20s %22s %24s %24s\n",
+            "nsynccalls", "nnonempty_pushes", "nnonempty_grabs",
+            "nclauses_pushed", "nclauses_grabbed", "nclauses_filtered_out",
+            "time_spent_syncing (ms)", "time_waiting_lock (ms)");
+    for (size_t idx = 0; idx < sharedLearntClauses->getNumWorkers(); idx++) {
+      auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedLearntClauses->getSyncTime(idx));
+      auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedLearntClauses->getLockWaitTime(idx));
+
+      fprintf(f,
+              "%-20s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
+              "%24lld\n",
+              ("solver" + std::to_string(idx)).c_str(),
+              sharedLearntClauses->getSyncs(idx),
+              sharedLearntClauses->getNonemptyPushes(idx),
+              sharedLearntClauses->getNonemptyGrabs(idx),
+              sharedLearntClauses->getClausesPushed(idx),
+              sharedLearntClauses->getClausesGrabbed(idx),
+              sharedLearntClauses->getClausesFilteredOut(idx),
+              static_cast<long long>(syncTime.count()),
+              static_cast<long long>(lockWaitTime.count()));
+    }
+
+    fprintf(f, "cclausesharingstats %16s %16s %20s\n", "largest_push",
+            "largest_grab", "most_clauses_in_bag");
+    fprintf(f, "cclausesharingstats %16zu %16zu %20zu\n",
+            sharedLearntClauses->getLargestPush(),
+            sharedLearntClauses->getLargestGrab(),
+            sharedLearntClauses->getMostClausesInBag());
+  }
+
+  if (getShareClauses() || getShareSolutions()) {
+    fprintf(f, "csolutionsharingstats %20s %20s %24s %24s %20s %20s\n",
+            "nsols_pushed", "nsols_grabbed", "time_spent_syncing (ms)",
+            "time_waiting_lock (ms)", "time_pulling (ms)", "time_pushing (ms)");
+
+    for (size_t idx = 0; idx < sharedSolutions->getNumWorkers(); idx++) {
+      auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedSolutions->getSyncTime(idx));
+      auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedSolutions->getLockWaitTime(idx));
+      auto pullTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedSolutions->getPullTime(idx));
+      auto pushTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+          sharedSolutions->getPushTime(idx));
+      fprintf(f, "%-20s %20zu %20zu %24lld %24lld %20lld %20lld\n",
+              ("solver" + std::to_string(idx)).c_str(),
+              sharedSolutions->getSolutionsPushed(idx),
+              sharedSolutions->getSolutionsPulled(idx),
+              static_cast<long long>(syncTime.count()),
+              static_cast<long long>(lockWaitTime.count()),
+              static_cast<long long>(pullTime.count()),
+              static_cast<long long>(pushTime.count()));
+    }
+  }
 }
 
-/*
 // Prints the corresponding answer.
-void PBtoCNF::printAnswer(int type){
+void PBtoCNF::printAnswer(int type) {
+  if (!isInsidePortfolio())
+    MOCO::printAnswer(type);
 
-if (verbosity > 0)
-printStats();
+  // Inside portfolio
+  std::unique_lock<std::mutex> lock(*printResultsLock);
+  if (!getShareClauses() && !getShareSolutions()) {
+    MOCO::printAnswer(type);
+  }
+  // Otherwise, solutions are in shared memory
+  switch (answerType) {
+  case _SATISFIABLE_:
+    printf("s SATISFIABLE\n");
+    printSolutions();
+    printStats();
+    break;
 
-if (type == _UNKNOWN_ && model.size() > 0)
-type = _SATISFIABLE_;
-
-switch(type){
-case _SATISFIABLE_:
-printf("s SATISFIABLE\n");
-printSmallestModel();
-break;
-case _OPTIMUM_:
-printf("c All requested MCSs found\n");
-printf("s OPTIMUM\n");
-printSmallestModel();
-break;
-case _UNSATISFIABLE_:
-printf("s UNSATISFIABLE\n");
-break;
-case _UNKNOWN_:
-printf("s UNKNOWN\n");
-break;
-default:
-printf("c Error: Unknown answer type.\n");
+  case _OPTIMUM_:
+    printf("s OPTIMUM FOUND\n");
+    printSolutions();
+    printStats();
+    break;
+  case _UNSATISFIABLE_:
+    printf("s UNSATISFIABLE\n");
+    break;
+  case _UNKNOWN_:
+    printf("s UNKNOWN\n");
+    break;
+  case _INTERRUPTED_:
+    printf("s INTERRUPTED\n");
+    printSolutions();
+    printStats();
+    break;
+  case _MEMOUT_:
+    printf("s MEMOUT\n");
+    printSolutions();
+    printStats();
+    break;
+  default:
+    printf("c Error: Invalid answer type.\n");
+    break;
+  }
+  exit(type);
 }
-}*/
 
+void PBtoCNF::printSolutions() { // TODO: Allow printing to a file
+
+  FILE *f = stdout;
+
+  auto sols = sharedSolutions->getSolutions();
+
+  if (print_model) {
+    fprintf(f, "c -------- Portfolio models (%zu):\n", sols.size());
+    for (auto &[t_id, sol] : sols) {
+      Model m = sol.model();
+      std::string line = "[s" + std::to_string(t_id) + "] v";
+      for (int i = 0; i < maxsat_formula->nVars(); i++) {
+        indexMap::const_iterator it = maxsat_formula->getIndexToName().find(i);
+        if (it != maxsat_formula->getIndexToName().end()) {
+          line += " ";
+          fprintf(f, " ");
+          if (m[i] == l_True)
+            line += " ";
+          else
+            line += "-";
+          line += it->second;
+        }
+      }
+      fprintf(f, "%s\n", line.c_str());
+    }
+    fprintf(f, "c --- End of models\n");
+  }
+
+  fprintf(f, "c Objective values:\n");
+  fprintf(f, "c Portfolio objv (%zu):\n", sols.size());
+  for (auto &[t_id, sol] : sols) {
+    std::string line = "c [s" + std::to_string(t_id) + "] pt";
+    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
+      line += " " + std::to_string(sol.yPoint()[i]);
+    fprintf(f, "%s\n", line.c_str());
+  }
+  fprintf(f, "c End of objective values\n");
+}
 /************************************************************************************************
  //
  // Other protected methods
@@ -1631,8 +1753,8 @@ void PBtoCNF::shareClauses() {
   solver->addLearntClauses(receivedClauses);
 }
 
-void PBtoCNF::shareSolutions(bool block) {
-  if (!getShareSolutions())
+void PBtoCNF::shareSolutions(bool alsoPull) {
+  if (!getShareSolutions() && !getShareClauses())
     return;
   std::vector<openwbo::Solution::OneSolution> localFront = {};
 
@@ -1641,7 +1763,8 @@ void PBtoCNF::shareSolutions(bool block) {
   }
 
   std::vector<openwbo::Solution::OneSolution> receivedFront =
-      sharedSolutions->syncSolutions(localFront, omp_get_thread_num(), block);
+      sharedSolutions->syncSolutions(localFront, omp_get_thread_num(),
+                                     alsoPull);
   for (auto &sol : receivedFront) {
     blockDominatedRegion(sol.yPoint());
   }

@@ -59,6 +59,9 @@ public:
     sharedSolutions = std::make_shared<solutionsharing::SharedSolutionsVector>(
         _portfolio.size());
     setSharedSolutionsSet(sharedSolutions);
+
+    printResultsLock = std::make_shared<std::mutex>();
+    setPrintResultsLock(printResultsLock);
   }
 
   ~PortfolioMO() {}
@@ -150,11 +153,11 @@ protected:
       solver->setShareSolutions(share);
   }
 
-  void printAnswer(int type) override;
-
-  void printSolutions();
-
-  void printStats() override;
+  void setPrintResultsLock(std::shared_ptr<std::mutex> lock) override {
+    PBtoCNF::setPrintResultsLock(lock);
+    for (auto &solver : _portfolio)
+      solver->setPrintResultsLock(lock);
+  }
 
 private:
   std::vector<PBtoCNF *> _portfolio;

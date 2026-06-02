@@ -31,13 +31,16 @@ bool UnsatSatIncHSMO::searchUnsatSatMO() {
 }
 
 bool UnsatSatIncHSMO::rootedSearch(const YPoint &yp) {
-  cout << getSolverId() << "c rooted search\n";
+  std::osyncstream(std::cout) << getSolverId() << "c rooted search\n";
   double runtime = cpuTime();
   lbool sat{};
   YPoint ul = yp;
 
 newHarvest:
-  cout << getSolverId() << "c new harvest. upperLimit: " << ul << endl;
+  std::ostringstream oss;
+  oss << ul;
+  std::osyncstream(std::cout)
+      << getSolverId() << "c new harvest. upperLimit: " << oss.str() << endl;
   // block blocked vars. For instance, when doing a MSU3 search
   assumptions.clear();
   for (const auto &el : blockedVars)
@@ -54,7 +57,15 @@ newHarvest:
     return false;
   }
 
-  while ((sat = solve()) == l_True) {
+  while ((sat = solve()) == l_Undef) {
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
+      return false;
+    }
+  }
+  while (sat == l_True) {
     if (getStopSearchFlag()) {
       printf("%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
@@ -72,8 +83,7 @@ newHarvest:
       // update soft variables that are still relevant
       runtime = cpuTime();
       // cout << getSolverId() << "c o " << yp << endl;
-    std:
-      ostringstream oss;
+      std::ostringstream oss;
       oss << yp;
       std::osyncstream(std::cout)
           << getSolverId() << "c o " << oss.str() << "\n";
@@ -90,14 +100,26 @@ newHarvest:
       printf("%sc new non-optimal solution (time: %.3f)\n",
              getSolverId().c_str(), runtime - initialTime);
     }
+
+    while ((sat = solve()) == l_Undef) {
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
+    }
   }
-  if (sat == l_Undef) {
-    marker = ul;
-    std::cout << getSolverId()
-              << "budget exhausted while dealing with ul =  " << marker
-              << std::endl;
-    return false;
-  }
+  // if (sat == l_Undef) {
+  //   marker = ul;
+  //   std::ostringstream oss;
+  //   oss << marker;
+  //   std::osyncstream(std::cout)
+  //       << getSolverId()
+  //       << "c budget exhausted while dealing with ul =  " << oss.str() <<
+  //       "\n";
+  //   return false;
+  // }
 
   if (getStopSearchFlag()) {
     printf("%sstopSearch has been set to true, another thread requested to "
@@ -148,9 +170,13 @@ void UnsatSatIncHSMO::checkSols() {
     it = solution().remove(it);
   }
 
-  std::cout << getSolverId() << "c lower bound: " << lowerBound.size() << endl;
-  for (auto &el : lowerBound)
-    std::cout << getSolverId() << "c " << el.second.first.yPoint() << endl;
+  std::osyncstream(std::cout)
+      << getSolverId() << "c lower bound size: " << lowerBound.size() << "\n";
+  for (auto &el : lowerBound) {
+    ostringstream oss;
+    oss << el.second.first.yPoint();
+    std::osyncstream(std::cout) << getSolverId() << "c " << oss.str() << "\n";
+  }
 }
 void UnsatSatIncHSMO::incrementSlice(const partition::MyPartition::part_t &p) {
   int i = 0;

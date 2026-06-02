@@ -54,6 +54,7 @@
 #include "MaxTypes.h"
 #include "ParserMaxSAT.h"
 #include "ParserPB.h"
+#include "PortfolioConfigParser.h"
 
 // Algorithms
 #include "algorithms/Alg_BLS.h"
@@ -396,141 +397,115 @@ void setLimits() {
     limitMemory(mem_lim);
 }
 
-std::vector<PBtoCNF *> createPortfolio(const char *filename) {
-  std::ifstream file(filename);
-  std::string line;
-  size_t num_solvers = 0;
-  std::vector<char *> params;
-  int params_count = 0;
-  std::string solver_alg;
+namespace PortfolioConfigParser {
 
-  // Config parsing: first read and set global settings
-  params.push_back(strdup("dummy")); // Parse options skip the first argument
-  while (std::getline(file, line) && line != "portfolio:") {
-    if (line.empty() || line[0] == '#')
-      continue; // Skip empty lines and comments
-
-    line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
-    auto colon_pos = line.find(':');
-    if (colon_pos == std::string::npos) {
-      printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
-             line.c_str());
-      continue;
+class NoClauseSharingHeuristic : public clausesharing::IClauseSharingHeuristic {
+public:
+  std::vector<vec<Lit>>
+  filter(const std::vector<vec<Lit>> &sharedClauses) override {
+    std::vector<vec<Lit>> result;
+    for (const vec<Lit> &clause : sharedClauses) {
+      vec<Lit> copy;
+      clause.copyTo(copy);
+      result.push_back(std::move(copy));
     }
+    return result;
+  }
+};
 
-    std::string key = line.substr(0, colon_pos);
-    std::string value = line.substr(colon_pos + 1);
+clausesharing::IClauseSharingHeuristic *
+createClauseSharingHeuristic(const PortfolioSolverConfig &solverConfig,
+                             int defaultHeuristic) {
+  int sharing_heuristic =
+      solverConfig.getIntOr("sharing_heuristic", defaultHeuristic);
 
-    if (key == "workers") {
-      num_solvers = std::stoul(value);
-    } else if (key == "output_file") {
-      key = "save-my-output";
-    } else if (key == "stop-on-first-result" || key == "share-clauses" ||
-               key == "share-solutions" || key == "print-model") {
-      if (value == "true")
-        params.push_back(strdup(("-" + key).c_str()));
-      else if (value == "false")
-        params.push_back(strdup(("-no-" + key).c_str()));
-
-      continue;
-    }
-
-    params.push_back(
-        strdup((std::string("-") + key + std::string("=") + value).data()));
+  if (sharing_heuristic == 0) {
+    return new NoClauseSharingHeuristic();
   }
 
-  params_count = params.size();
-  parseOptions(params_count, params.data(), false);
-
-  params_count = 0;
-  for (char *p : params)
-    if (strncmp(p, "-save-my-output", 15) !=
-        0) // stored by the option, so don't free it here
-      free(p);
-  params.clear();
-  params.push_back(strdup("dummy")); // Parse options skip the first argument
-  std::vector<openwbo::PBtoCNF *> solvers = {};
-
-  size_t solver_idx = 0;
-  clausesharing::IClauseSharingHeuristic *sharing_heuristic = nullptr;
-  while (std::getline(file, line) && solver_idx < num_solvers) {
-
-    if (line.empty() || line[0] == '#' || line == "solver:")
-      continue; // Skip empty lines, comments and solver beginning delimiters
-
-    if (line == "end_solver") {
-      solver_idx++;
-
-      params_count = params.size();
-      parseOptions(params_count, params.data(), false);
-
-      if (solver_alg == "pmin") {
-
-        solvers.push_back(new PMinimalMO(
-            options::verbosity, options::weight, options::partition_strategy,
-            options::cardinality, options::pb, options::pbobjf));
-      } else if (solver_alg == "us") {
-        solvers.push_back(new UnsatSatBudgetMO(
-            options::verbosity, options::weight, options::partition_strategy,
-            options::cardinality, options::pb, options::pbobjf,
-            options::conf_core, options::conf_budget, options::core_block));
-      } else if (solver_alg == "hs") {
-        solvers.push_back(new HittingSetsMO(
-            options::verbosity, options::weight, options::partition_strategy,
-            options::cardinality, options::pb, options::pbobjf));
-      } else if (solver_alg == "sd") {
-        solvers.push_back(new SlideDrillMO(
-            options::verbosity, options::weight, options::partition_strategy,
-            options::cardinality, options::pb, options::pbobjf));
-      } else {
-        fprintf(stderr,
-                "c Error: Invalid solver algorithm in portfolio config: %s\n",
-                solver_alg.c_str());
-        exit(_ERROR_);
-      }
-      // TODO: make this more flexible by allowing to specify the heuristic in
-      // the config file
-      solvers.back()->setClauseSharingHeuristic(
-          new clausesharing::SizeHeuristic());
-
-      // if (options::conf_budget != -1) {
-      //   solvers.back()->setConflictLimit(options::conf_budget); TODO: allow
-      //   conflict budget per solver in the config file options::conf_budget =
-      //   -1;
-      // }
-
-      params_count = 0;
-      for (char *p : params)
-        free(p);
-      params.clear();
-      params.push_back(
-          strdup("dummy")); // Parse options skip the first argument
-
-      continue;
+  if (sharing_heuristic == 1) {
+    int size = solverConfig.getIntOr("sharing_heuristic_size", 8);
+    if (size < 0) {
+      fprintf(stderr,
+              "c Error: Invalid sharing_heuristic_size in portfolio config: "
+              "%d\n",
+              size);
+      exit(_ERROR_);
     }
-
-    line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
-
-    auto colon_pos = line.find(':');
-    if (colon_pos == std::string::npos) {
-      printf("c Error: Invalid line in portfolio config: %s, ignoring...\n",
-             line.c_str());
-      continue;
-    }
-
-    std::string key = line.substr(0, colon_pos);
-    std::string value = line.substr(colon_pos + 1);
-
-    if (key == "algorithm") {
-      solver_alg = value;
-      continue;
-    }
-    params.push_back(
-        strdup((std::string("-") + key + std::string("=") + value).data()));
+    return new clausesharing::SizeHeuristic(size);
   }
 
-  return solvers;
+  fprintf(stderr,
+          "c Error: Invalid sharing_heuristic in portfolio config: %d\n",
+          sharing_heuristic);
+  exit(_ERROR_);
+  return nullptr;
 }
+
+PBtoCNF *createPortfolioSolver(const PortfolioSolverConfig &solverConfig) {
+  int verbosity = solverConfig.getIntOr("verbosity", options::verbosity);
+  int weight = solverConfig.getIntOr("weight-strategy", options::weight);
+  int partition_strategy =
+      solverConfig.getIntOr("partition-strategy",
+                            options::partition_strategy);
+  int cardinality = solverConfig.getIntOr("cardinality", options::cardinality);
+  int pb = solverConfig.getIntOr("pb", options::pb);
+  int pbobjf = solverConfig.getIntOr("pbobjf", options::pbobjf);
+
+  PBtoCNF *solver = nullptr;
+  if (solverConfig.type == "pmin") {
+    solver = new PMinimalMO(verbosity, weight, partition_strategy, cardinality,
+                            pb, pbobjf);
+  } else if (solverConfig.type == "us") {
+    solver = new UnsatSatMO(verbosity, weight, partition_strategy, cardinality,
+                            pb, pbobjf);
+  } else if (solverConfig.type == "hs") {
+    solver = new HittingSetsMO(verbosity, weight, partition_strategy,
+                               cardinality, pb, pbobjf);
+  } else if (solverConfig.type == "sd") {
+    solver = new SlideDrillMO(verbosity, weight, partition_strategy,
+                              cardinality, pb, pbobjf);
+  } else {
+    fprintf(stderr, "c Error: Invalid solver type in portfolio config: %s\n",
+            solverConfig.type.c_str());
+    exit(_ERROR_);
+  }
+
+  solver->setClauseSharingHeuristic(createClauseSharingHeuristic(
+      solverConfig, options::sharing_heuristic));
+
+  int conf_budget =
+      solverConfig.getIntOr("conf_budget", options::conf_budget);
+  if (conf_budget != -1) {
+    solver->setConflictLimit(conf_budget);
+  }
+
+  return solver;
+}
+
+PortfolioMO *createPortfolioMO(const char *filename, int &argc, char **argv) {
+  PortfolioConfig config =
+      PortfolioConfigParser::parsePortfolioConfig(filename);
+  parseGlobalPortfolioOptions(config.global, parseOptions);
+
+  std::vector<openwbo::PBtoCNF *> solvers;
+  for (std::size_t i = 0; i < config.solvers.size(); ++i) {
+    solvers.push_back(createPortfolioSolver(config.solvers[i]));
+  }
+
+  parseOptions(argc, argv, true);
+
+  PortfolioMO *portfolio =
+      new PortfolioMO(options::verbosity, options::weight,
+                      options::partition_strategy, options::cardinality,
+                      options::pb, options::pbobjf, solvers,
+                      options::stop_on_first_result, options::share_clauses,
+                      options::share_solutions);
+  portfolio->setPrintModel(options::printmodel);
+  return portfolio;
+}
+
+} // namespace PortfolioConfigParser
 
 MaxSAT *buildSolver(int argc, char **argv) {
   using namespace options;
@@ -686,12 +661,7 @@ MaxSAT *buildSolver(int argc, char **argv) {
       break;
     }
 
-    std::vector<openwbo::PBtoCNF *> solvers = createPortfolio(argv[2]);
-    parseOptions(argc, argv, true);
-    S = new PortfolioMO(verbosity, weight, partition_strategy, cardinality, pb,
-                        pbobjf, solvers, options::stop_on_first_result,
-                        options::share_clauses, options::share_solutions);
-    static_cast<PortfolioMO *>(S)->setPrintModel(options::printmodel);
+    S = PortfolioConfigParser::createPortfolioMO(argv[2], argc, argv);
     break;
   }
   default:

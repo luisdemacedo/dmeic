@@ -181,6 +181,7 @@ public:
   Solution lowerBound;
   std::shared_ptr<MOCOFormula> mf;
   std::shared_ptr<MOCOFormula> wf;
+  virtual std::string getSolverId() { return ""; };
   shared_ptr<MOCOFormula> getFormula() { return mf; };
   shared_ptr<MOCOFormula> getWFormula() { return wf; };
   virtual shared_ptr<MOCOFormula> workFormula() { return getWFormula(); };

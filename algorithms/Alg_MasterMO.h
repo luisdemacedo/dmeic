@@ -41,7 +41,7 @@ public:
         answerType = res;
       if (getStopSearchFlag()) {
         answerType = _INTERRUPTED_;
-        DLOG(stderr,
+        DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
@@ -52,10 +52,10 @@ public:
       answerType = openwbo::_UNSATISFIABLE_;
 
     requestStopSearch();
-    shareSolutions(true);
+    shareSolutions(getShareSolutions());
     if (!isInsidePortfolio() || !getShareSolutions()) {
       printAnswer(answerType);
-      exit(answerType);
+      // exit(answerType);
     }
   }
 
@@ -64,7 +64,7 @@ public:
     do {
       res = compute_approx();
       if (getStopSearchFlag()) {
-        DLOG(stderr,
+        DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());
@@ -76,7 +76,7 @@ public:
         return res;
 
       shareClauses();
-      shareSolutions(true);
+      shareSolutions(getShareSolutions());
     } while (setup_approx());
     return res;
   }

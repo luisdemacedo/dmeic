@@ -69,10 +69,10 @@ void UnsatSatBudgetMO::search_MO() {
   }
 
   requestStopSearch();
-  shareSolutions(true);
+  shareSolutions(getShareSolutions());
   if (!isInsidePortfolio() || !getShareSolutions()) {
     printAnswer(answerType);
-    exit(answerType);
+    // exit(answerType);
   }
 }
 
@@ -82,7 +82,10 @@ bool UnsatSatBudgetMO::rootedSearch(const YPoint &yp) {
   YPoint ul = yp;
 
 newHarvest:
-  cout << getSolverId() << "c new harvest. upperLimit: " << ul << endl;
+  std::ostringstream oss;
+  oss << ul;
+  std::osyncstream(std::cout)
+      << getSolverId() << "c new harvest. upperLimit: " << oss.str() << "\n";
   assumptions.clear();
   // reinserts the MSU3 blocked vars
 
@@ -97,7 +100,7 @@ newHarvest:
     return false;
   }
   shareClauses();
-  shareSolutions(true);
+  shareSolutions(getShareSolutions());
   while (solve() == l_True) {
     if (getStopSearchFlag()) {
       printf("%sstopSearch has been set to true, another thread requested to "
@@ -115,7 +118,7 @@ newHarvest:
           << getSolverId() << "c o " << oss.str() << "\n";
       // printf("%sc o ", getSolverId().c_str());
       // std::cout << solution().yPoint() << std::endl;
-      shareSolutions(true);
+      shareSolutions(getShareSolutions());
       runtime = cpuTime();
       printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
              runtime - initialTime);
@@ -236,7 +239,7 @@ bool UnsatSatBudgetMO::optimize_core_destructive(vec<Lit> &conflict,
     }
 
     shareClauses();
-    shareSolutions(true);
+    shareSolutions(getShareSolutions());
     if ((sat = solve()) == l_True) {
       if (getStopSearchFlag()) {
         printf("%sstopSearch has been set to true, another thread requested to "

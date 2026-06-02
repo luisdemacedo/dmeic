@@ -50,6 +50,7 @@ public:
   std::chrono::nanoseconds getLockWaitTime(int thread_id) const {
     return lock_wait_times[thread_id];
   }
+  size_t getNumWorkers() const { return syncs.size(); }
 
 protected:
   virtual void push(const std::vector<vec<Lit>> &clauses, int thread_id) = 0;

@@ -7,6 +7,8 @@ void SlideDrillMO::search_MO() {
   if (firstSolution()) {
     updateMOFormulation();
     blockDominatedRegion(first.yPoint());
+    Model m = make_model(solver->model);
+    solution().pushSafe(m);
     YPoint yp{};
     for (int i = 0, n = getFormula()->nObjFunctions(); i < n; i++)
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
@@ -27,10 +29,10 @@ void SlideDrillMO::search_MO() {
 
   requestStopSearch();
 
-  shareSolutions(true);
+  shareSolutions(getShareSolutions());
   if (!isInsidePortfolio() || !getShareSolutions()) {
     printAnswer(answerType);
-    exit(answerType);
+    // exit(answerType);
   }
 }
 bool SlideDrillMO::searchBoundHonerMO() {
@@ -71,8 +73,10 @@ bool SlideDrillMO::drill() {
     assumptions.clear();
     yp = waiting_list->pop();
 
-    cout << getSolverId() << "c " << "drill from " << yp
-         << " with hv=" << hv(yp) << endl;
+    std::ostringstream oss;
+    oss << yp;
+    std::osyncstream(std::cout) << getSolverId() << "c " << "drill from "
+                                << oss.str() << " with hv=" << hv(yp) << "\n";
     auto it = mem.find(yp);
     // assume dominating region, until the next drill takes place.
     PBtoCNF::assumeDominatingRegion(yp);
@@ -89,7 +93,17 @@ bool SlideDrillMO::drill() {
     }
 
     // look for the first queued element that is not optimal
-    shareSolutions(true);
+    while ((sat = solve()) != l_Undef) {
+      shareSolutions(getShareSolutions());
+      shareClauses();
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
+    }
+
     if ((sat = solve()) != l_False) {
       break;
     } else {
@@ -99,7 +113,6 @@ bool SlideDrillMO::drill() {
       if (!solver->conflict.size())
         return false;
       // prune(solver->conflict, yp);
-      // std::cout << getSolverId() << "c o " << yp << std::endl;
       std::ostringstream oss;
       oss << yp;
       std::osyncstream(std::cout)
@@ -114,13 +127,14 @@ bool SlideDrillMO::drill() {
     shareClauses();
   }
   assumptions.clear();
-  if (sat == l_Undef) {
-    cout << getSolverId() << "c budget exhausted during drill. Push " << yp
-         << " again" << endl;
-    answerType = _BUDGET_;
-    waiting_list->unpop(1);
-    return false;
-  }
+  // Dead code, TODO: remove
+  // if (sat == l_Undef) {
+  //   cout << getSolverId() << "c budget exhausted during drill. Push " << yp
+  //        << " again" << endl;
+  //   answerType = _BUDGET_;
+  //   waiting_list->unpop(1);
+  //   return false;
+  // }
   if (sat == l_False)
     return false;
   drill_marker = yp;
@@ -261,8 +275,10 @@ bool SlideDrillMO::slide() {
   auto n_it = mem.find(drill_marker);
   PBtoCNF::assumeDominatingRegion(drill_marker);
   if (n_it != mem.end()) {
-    std::cout << getSolverId() << "c restart slide under " << drill_marker
-              << endl;
+    std::ostringstream oss;
+    oss << drill_marker;
+    std::osyncstream(std::cout)
+        << getSolverId() << "c restart slide under " << oss.str() << endl;
     // block region below slide produces
     for (auto dep : n_it->second.deps)
       assumptions.push(~dep);
@@ -273,6 +289,16 @@ bool SlideDrillMO::slide() {
   }
   Node &n{n_it->second};
   do {
+    while ((sat = solve()) == l_Undef) {
+      shareSolutions(getShareSolutions());
+      shareClauses();
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
+    }
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
@@ -288,13 +314,15 @@ bool SlideDrillMO::slide() {
       oss << sol;
       std::osyncstream(std::cout)
           << getSolverId() << "c o " << oss.str() << "\n";
-      // printf("%sc o ", getSolverId().c_str());
-      // std::cout << sol << std::endl;
       runtime = cpuTime();
       printf("%sc new suboptimal solution (time: %.3f)\n",
              getSolverId().c_str(), runtime - initialTime);
       // temporarily avoid region dominating last point
-      std::cout << getSolverId() << "c " << "slide from " << yp << endl;
+      oss.str("");
+      oss.clear();
+      oss << yp;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c " << "slide from " << oss.str() << endl;
       blockStep(yp);
       // add temporary clause, and set toggling variable through global
       // assumptions
@@ -309,8 +337,8 @@ bool SlideDrillMO::slide() {
     }
 
     shareClauses();
-    shareSolutions(true);
-  } while ((sat = solve()) == l_True);
+    shareSolutions(getShareSolutions());
+  } while (sat == l_True);
 
   if (getStopSearchFlag()) {
     printf("%sstopSearch has been set to true, another thread requested to "
@@ -321,16 +349,22 @@ bool SlideDrillMO::slide() {
 
   // fix temporary variables used during slide, which are listed
   // in the assumptions.
-  if (sat == l_Undef) {
-    std::cout << getSolverId() << "c budget exhausted during slide.";
-    if (!drill_marker.empty()) {
-      std::cout << " Push " << drill_marker << " again";
-      waiting_list->unpop(0);
-    }
-    std::cout << endl;
-    answerType = _BUDGET_;
-    return false;
-  }
+  // TODO: remove this as it is dead code
+  // if (sat == l_Undef) {
+  //   if (!drill_marker.empty()) {
+  //     std::ostringstream oss;
+  //     oss << drill_marker;
+  //     std::osyncstream(std::cout)
+  //         << getSolverId() << "c budget exhausted during slide."
+  //         << " Push " << oss.str() << " again\n"
+  //         << endl;
+  //     waiting_list->unpop(0);
+  //   } else
+  //     std::osyncstream(std::cout)
+  //         << getSolverId() << "c budget exhausted during slide.\n";
+  //   answerType = _BUDGET_;
+  //   return false;
+  // }
   // describe_core(solver->conflict);
   for (auto l : n.deps) {
     solver->addClause(l);
@@ -422,7 +456,6 @@ void SlideDrillServerMO::increment() {
     answerType = openwbo::_UNKNOWN_;
 }
 void SlideDrillServerMO::printAnswer(int) {
-  printf("Solver: %p\n", solver);
   std::cout << "c SlideDrillServerMO report" << endl;
   if (answerType == openwbo::_UNKNOWN_)
     if (drill_marker.size())
@@ -430,6 +463,5 @@ void SlideDrillServerMO::printAnswer(int) {
   waiting_list->report();
   solution().report();
   std::cout << "c SlideDrillServerMO report done" << endl;
-  printf("Solver: %p\n", solver);
 }
 } // namespace openwbo

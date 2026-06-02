@@ -92,8 +92,10 @@ bool HittingSetsMO::recycleLowerBoundSet() {
       absorb(osol, bvar);
     else if (sat == l_False) {
       andf = false;
-      std::cout << getSolverId() << "c solution " << osol
-                << " not satisfiable\n";
+      std::ostringstream oss;
+      oss << osol;
+      std::osyncstream(std::cout) << getSolverId() << "c solution " << oss.str()
+                                  << " not satisfiable\n";
       optim->mark_solution(id);
       diagnose(osol, assmpts);
     } else {
@@ -104,7 +106,8 @@ bool HittingSetsMO::recycleLowerBoundSet() {
 }
 
 void HittingSetsMO::incrementFormula() {
-  cout << getSolverId() << "diagnoses size: " << diagnoses.size() << endl;
+  std::osyncstream(std::cout)
+      << getSolverId() << "diagnoses size: " << diagnoses.size() << "\n";
   set<Lit> slice;
 
   for (auto &diag : diagnoses) {

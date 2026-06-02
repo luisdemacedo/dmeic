@@ -113,8 +113,8 @@ public:
 
   void requestStopSearch() {
     if (_stopSearch) {
-      DLOG(stderr, "I am thread %d setting pointer stopSearch (%p) to true\n",
-           omp_get_thread_num(), _stopSearch.get());
+      DLOG(stdout, "%sSetting pointer stopSearch to true\n",
+           getSolverId().c_str());
       _stopSearch->store(true);
     }
   }
@@ -142,6 +142,10 @@ public:
   setClauseSharingHeuristic(clausesharing::IClauseSharingHeuristic *heuristic) {
     sharingHeuristic =
         std::unique_ptr<clausesharing::IClauseSharingHeuristic>(heuristic);
+  }
+
+  virtual void setPrintResultsLock(std::shared_ptr<std::mutex> lock) {
+    printResultsLock = lock;
   }
 
   std::vector<vec<Lit>> filterClauses(const std::vector<vec<Lit>> &clauses) {
@@ -185,6 +189,8 @@ public:
                           // HittingSetsMO.
     blockDominatedRegion(yp);
   }
+
+  void printAnswer(int type) override;
 
 protected:
   // Rebuild MaxSAT solver
@@ -258,15 +264,16 @@ protected:
                             uint64_t *lastobjix, int nObj);
 
   void shareClauses();
-  void shareSolutions(bool block);
+  void shareSolutions(bool alsoPull);
   bool isInsidePortfolio() {
-    return _stopSearch || _shareClauses || _shareSolutions;
+    return _stopSearch || _shareClauses || _shareSolutions || printResultsLock;
   }
-  std::string getSolverId() {
+  std::string getSolverId() override {
     return isInsidePortfolio()
                ? "[s" + std::to_string(omp_get_thread_num()) + "] "
                : "";
   }
+  void printSolutions();
 
 protected:
   // ------------------------------------------------------------------- //
@@ -373,6 +380,7 @@ protected:
   std::unique_ptr<clausesharing::IClauseSharingHeuristic> sharingHeuristic;
   std::shared_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
   char *clause_sharing_stats_file;
+  std::shared_ptr<std::mutex> printResultsLock;
 };
 void evalToIndex(const YPoint &yp, uint64_t *objix,
                  std::vector<PBtoCNF::rootLits_t> &objRootLits);

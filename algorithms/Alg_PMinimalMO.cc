@@ -39,7 +39,7 @@ void PMinimalMO::search_MO() {
       searchPMinimalMO();
       if (getStopSearchFlag()) {
         answerType = _INTERRUPTED_;
-        DLOG(stderr,
+        DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
@@ -78,11 +78,14 @@ void PMinimalMO::search_MO() {
       clearLowerBoundSet();
   }
 
+  if (solution().size() == 0)
+    answerType = _UNSATISFIABLE_;
+
   requestStopSearch();
-  shareSolutions(true);
+  shareSolutions(getShareSolutions());
   if (!isInsidePortfolio() || !getShareSolutions()) {
     printAnswer(answerType);
-    exit(answerType);
+    // exit(answerType);
   }
 }
 
@@ -95,7 +98,7 @@ bool PMinimalMO::searchPMinimalMO() {
   assumptions.clear();
 
   if (getStopSearchFlag()) {
-    DLOG(stderr,
+    DLOG(stdout,
          "%sstopSearch has been set to true, another thread requested to "
          "stop the search. Stopping search now...\n",
          getSolverId().c_str());
@@ -103,23 +106,23 @@ bool PMinimalMO::searchPMinimalMO() {
   }
 
   shareClauses();
-  shareSolutions(true);
+  shareSolutions(getShareSolutions());
   auto sat = solve();
   while (sat == l_Undef) {
     if (getStopSearchFlag()) {
-      DLOG(stderr,
+      DLOG(stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Stopping search now...\n",
            getSolverId().c_str());
       return false;
     }
     shareClauses();
-    shareSolutions(true);
+    shareSolutions(getShareSolutions());
     sat = solve();
   }
   for (; sat == l_True;) {
     if (getStopSearchFlag()) {
-      DLOG(stderr,
+      DLOG(stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Stopping search now...\n",
            getSolverId().c_str());
@@ -128,7 +131,7 @@ bool PMinimalMO::searchPMinimalMO() {
 
     for (; sat == l_True;) {
       if (getStopSearchFlag()) {
-        DLOG(stderr,
+        DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());
@@ -152,18 +155,18 @@ bool PMinimalMO::searchPMinimalMO() {
       PBtoCNF::assumeDominatingRegion(ul);
 
       shareClauses();
-      shareSolutions(true);
+      shareSolutions(getShareSolutions());
       sat = solve();
       while (sat == l_Undef) {
         if (getStopSearchFlag()) {
-          DLOG(stderr,
+          DLOG(stdout,
                "%sstopSearch has been set to true, another thread requested "
                "stop the search. Stopping search now...\n",
                getSolverId().c_str());
           return false;
         }
         shareClauses();
-        shareSolutions(true);
+        shareSolutions(getShareSolutions());
         sat = solve();
       }
     }
@@ -173,18 +176,18 @@ bool PMinimalMO::searchPMinimalMO() {
            runtime - initialTime);
     blockDominatedRegion(ul);
     shareClauses();
-    shareSolutions(true);
+    shareSolutions(getShareSolutions());
     sat = solve();
     while (sat == l_Undef) {
       if (getStopSearchFlag()) {
-        DLOG(stderr,
+        DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());
         return false;
       }
       shareClauses();
-      shareSolutions(true);
+      shareSolutions(getShareSolutions());
       sat = solve();
     }
   }

@@ -33,25 +33,65 @@ public:
     solutionsPulledByThread.resize(numSolvers);
     syncTimeByThread.resize(numSolvers);
     lockWaitTimeByThread.resize(numSolvers);
+    pullTimeByThread.resize(numSolvers);
+    pushTimeByThread.resize(numSolvers);
   }
 
   virtual std::vector<openwbo::Solution::OneSolution>
   syncSolutions(const std::vector<openwbo::Solution::OneSolution> candidates,
-                size_t thread_id, bool blocking) override {
+                size_t thread_id, bool alsoPull) override {
     auto t_start = clock::now();
+    size_t sharedBefore = sharedSolutions.size();
     std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
-    DLOG(stderr, "[s%d] Trying to acquire shared solutions lock...\n",
+    DLOG(stdout, "[s%d] Trying to acquire shared solutions lock...\n",
          omp_get_thread_num());
-    if (blocking)
-      lock.lock();
-    else if (!lock.try_lock())
-      return {}; // Return empty if we can't acquire the lock
-                 //
+    lock.lock();
+
     auto t_lock_acquired = clock::now();
-    DLOG(stderr, "[s%d] Acquired shared solutions lock...\n",
+    DLOG(stdout, "[s%d] Acquired shared solutions lock...\n",
          omp_get_thread_num());
 
     std::vector<openwbo::Solution::OneSolution> result = {};
+
+    pushSolutions(candidates, thread_id);
+    if (alsoPull)
+      result = pullSolutions(thread_id);
+
+    auto t_end = clock::now();
+
+    auto callSyncTime =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
+    auto callLockWaitTime =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t_lock_acquired -
+                                                             t_start);
+    auto callHeldTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        t_end - t_lock_acquired);
+
+    syncTimeByThread[thread_id] += callSyncTime;
+    lockWaitTimeByThread[thread_id] += callLockWaitTime;
+
+    DLOG(stdout,
+         "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
+         "candidates: %zu, shared solutions (before): %zu, shared solutions "
+         "(after): %zu\n",
+         omp_get_thread_num(),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(callSyncTime)
+                 .count()),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(
+                 callLockWaitTime)
+                 .count()),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(callHeldTime)
+                 .count()),
+         candidates.size(), sharedBefore, sharedSolutions.size());
+    return result;
+  }
+
+  void pushSolutions(std::vector<openwbo::Solution::OneSolution> candidates,
+                     size_t thread_id) override {
+    auto t_start = clock::now();
     std::vector<TaggedSolution> toAdd = {};
     std::vector<bool> toRemove(sharedSolutions.size(), false);
 
@@ -77,10 +117,6 @@ public:
       toAdd.push_back({cCopy, lastUpdateTime, thread_id});
     }
 
-    for (const auto &tsSol : sharedSolutions)
-      if (solverTimestamps[thread_id] < tsSol.ts)
-        result.push_back(tsSol.sol);
-
     size_t i = 0;
     std::erase_if(sharedSolutions, [&](const auto &) { return toRemove[i++]; });
     sharedSolutions.insert(sharedSolutions.end(), toAdd.begin(), toAdd.end());
@@ -88,42 +124,45 @@ public:
 
     auto t_end = clock::now();
 
-    auto callSyncTime =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
-    auto callLockWaitTime =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t_lock_acquired -
-                                                             t_start);
-    auto callHeldTime = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        t_end - t_lock_acquired);
-
-    syncTimeByThread[thread_id] += callSyncTime;
-    lockWaitTimeByThread[thread_id] += callLockWaitTime;
     solutionsPushedByThread[thread_id] += toAdd.size();
-    solutionsPulledByThread[thread_id] += result.size();
+    auto callPushTime =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
+    pushTimeByThread[thread_id] += callPushTime;
+    DLOG(stdout,
+         "[s%d] pushSolutions call: %lld ms, candidates: %zu, pushed: %zu\n",
+         omp_get_thread_num(),
+         static_cast<long long>(
+             std::chrono::duration_cast<std::chrono::milliseconds>(callPushTime)
+                 .count()),
+         candidates.size(), toAdd.size());
+  }
 
-    DLOG(stderr,
-         "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
-         "candidates: %zu, already shared (before): %zu, already shared "
-         "(after): %zu, pulled: %zu, pushed: "
+  std::vector<openwbo::Solution::OneSolution>
+  pullSolutions(size_t thread_id) override {
+    auto t_start = clock::now();
+    std::vector<openwbo::Solution::OneSolution> result;
+    for (const auto &tsSol : sharedSolutions)
+      if (solverTimestamps[thread_id] < tsSol.ts)
+        result.push_back(tsSol.sol);
+
+    auto t_end = clock::now();
+    solutionsPulledByThread[thread_id] += result.size();
+    auto callPullTime =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
+
+    pullTimeByThread[thread_id] += callPullTime;
+
+    DLOG(stdout,
+         "[s%d] pullSolutions call: %lld ms, solutions in pool: %zu, pulled: "
          "%zu\n",
          omp_get_thread_num(),
          static_cast<long long>(
-             std::chrono::duration_cast<std::chrono::milliseconds>(callSyncTime)
+             std::chrono::duration_cast<std::chrono::milliseconds>(callPullTime)
                  .count()),
-         static_cast<long long>(
-             std::chrono::duration_cast<std::chrono::milliseconds>(
-                 callLockWaitTime)
-                 .count()),
-         static_cast<long long>(
-             std::chrono::duration_cast<std::chrono::milliseconds>(callHeldTime)
-                 .count()),
-         candidates.size(),
-         sharedSolutions.size() +
-             std::count(toRemove.begin(), toRemove.end(), true) - toAdd.size(),
-         sharedSolutions.size(), result.size(), toAdd.size());
+         sharedSolutions.size(), result.size());
+
     return result;
   }
-
   virtual std::vector<std::pair<size_t, openwbo::Solution::OneSolution>>
   getSolutions() override {
     std::vector<std::pair<size_t, openwbo::Solution::OneSolution>> result;

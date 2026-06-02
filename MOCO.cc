@@ -72,8 +72,7 @@ void MOCO::printAnswer(int type) {
   }
   if (verbosity > 0 && print)
     printStats();
-  printf("c ---------- OUTPUT (Thread %d) ---------------\n",
-         omp_get_thread_num());
+  printf("c ---------- OUTPUT %s---------------\n", getSolverId().c_str());
 
   if (type == _UNKNOWN_ && effsols.size() > 0)
     type = _SATISFIABLE_;
@@ -123,7 +122,7 @@ void MOCO::printAnswer(int type) {
   default:
     printf("c Error: Invalid answer type.\n");
   }
-  // exit(0); //AG - adicionei depois usar o setrlimit para ignorar o tempo de
+  exit(0); // AG - adicionei depois usar o setrlimit para ignorar o tempo de
   // encoding (em Alg_BLS.cc)
 }
 
@@ -197,12 +196,10 @@ void MOCO::printEffSolutions(bool printLBset) {
 
   printf("c lower bound set of transformed prob\n");
   for (size_t i = 0; i < LBset.size(); i++) {
-    printf("c lb");
-    for (int di = 0; di < d; di++) {
-      printf(" %ld",
-             LBset[i][di]); // + maxsat_formula->getObjFunction(di)->_const);
-    }
-    printf("\n");
+    std::string line = "c lb";
+    for (int di = 0; di < d; di++)
+      line += " " + std::to_string(LBset[i][di]);
+    printf("%s\n", line.c_str());
   }
   printf("c ------- \n");
   printf("c %lu lbs T\n", LBset.size());
@@ -214,16 +211,15 @@ void MOCO::printEffSolutions(bool printLBset) {
   if (printLBset && LBset.size() > 0) {
     f = (print_my_output) ? fopen(lbset_file, "w") : stdout;
     for (size_t i = 0; i < LBset.size(); i++) {
+      std::string line;
       if (!print_my_output)
-        fprintf(f, "c LBs");
+        line = "c LBs";
       for (int di = 0; di < d; di++) {
-        fprintf(
-            f, " %ld",
-            LBset[i][di] +
-                maxsat_formula->getObjFunction(di)
-                    ->_const); // + maxsat_formula->getObjFunction(di)->_const);
+        line +=
+            " " + std::to_string(LBset[i][di] +
+                                 maxsat_formula->getObjFunction(di)->_const);
       }
-      fprintf(f, "\n");
+      fprintf(f, "%s\n", line.c_str());
     }
     //         fprintf(f, "c ------- \n");
     printf("c %lu points in lower bound set\n", LBset.size());
@@ -236,24 +232,25 @@ void MOCO::printEffSolutions(bool printLBset) {
   f = (print_my_output) ? fopen(objv_file, "w") : stdout;
 
   for (size_t i = 0; i < nondom.size(); i++) {
+    std::string line = "";
     if (!print_my_output)
-      fprintf(f, "o");
+      line = "o";
     for (int di = 0; di < d; di++) {
-      fprintf(f, " %ld",
-              nondom[i][di] + maxsat_formula->getObjFunction(di)->_const);
+      line += " " + std::to_string(
+                        (long)(nondom[i][di] +
+                               maxsat_formula->getObjFunction(di)->_const));
     }
-    fprintf(f, "\n");
+    fprintf(f, "%s\n", line.c_str());
   }
   printf("c %lu nondominated points\n", nondom.size());
   if (print_my_output)
     fclose(f);
 
-  printf("c _consts:");
+  std::string line = "c _consts:";
 
-  for (int di = 0; di < d; di++) {
-    printf(" %ld", maxsat_formula->getObjFunction(di)->_const);
-  }
-  printf("\n");
+  for (int di = 0; di < d; di++)
+    line += " " + std::to_string(maxsat_formula->getObjFunction(di)->_const);
+  printf("%s\n", line.c_str());
 }
 void MOCO::printMyStats() {
   double totalTime = cpuTime();

@@ -741,7 +741,10 @@ bool Solution::pushSafe(const Model &m, notes_t notes, bool check_new,
       Solution::OneSolution &osol = it->second.first;
       if ((osol_a.yPoint() != osol.yPoint()) &&
           pareto::dominates(osol_a, osol)) {
-        std::cout << "c new " << osol_a << " dominates " << osol << '\n';
+        std::ostringstream oss;
+        oss << osol_a << " dominates " << osol;
+        std::osyncstream(std::cout)
+            << maxs->getSolverId() << "c new " << oss.str() << '\n';
         it = remove(it);
         dropped++;
       } else

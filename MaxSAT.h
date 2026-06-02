@@ -43,6 +43,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <syncstream>
 #include <utility>
 #include <vector>
 

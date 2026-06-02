@@ -49,13 +49,20 @@ void UnsatSatMO::search_MO() {
   bool resform = buildWorkFormula();
 
   if (resform) {
-    printf("c search\n");
+    printf("%sc search\n", getSolverId().c_str());
     searchUnsatSatMO();
   } else {
-    printf("c No more solutions!\n");
+    printf("%sc No more solutions!\n", getSolverId().c_str());
+  }
+  if (getStopSearchFlag()) {
+    answerType = _INTERRUPTED_;
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Search stopped.\n",
+           getSolverId().c_str());
+    return;
   }
 
-  printf("c Done searching\n");
+  printf("%sc Done searching\n", getSolverId().c_str());
   PBtoCNF::consolidateSolution();
   if (solution().size() > 0) {
     answerType = _OPTIMUM_;
@@ -63,16 +70,23 @@ void UnsatSatMO::search_MO() {
     answerType = _UNSATISFIABLE_;
   }
 
-  printAnswer(answerType);
+  requestStopSearch();
+  shareSolutions(getShareSolutions());
+  if (!isInsidePortfolio() || !getShareSolutions())
+    printAnswer(answerType);
 }
 
 bool UnsatSatMO::rootedSearch(const YPoint &yp) {
   double runtime = cpuTime();
   assumptions.clear();
   YPoint ul = yp;
+  lbool sat{};
 
 newHarvest:
-  cout << "c new harvest. upperLimit: " << ul << endl;
+  std::ostringstream oss;
+  oss << ul;
+  std::osyncstream(std::cout)
+      << getSolverId() << "c new harvest. upperLimit: " << oss.str() << "\n";
   assumptions.clear();
   // reinserts the MSU3 blocked vars
 
@@ -80,15 +94,46 @@ newHarvest:
     assumptions.push(~el);
   assumeDominatingRegion(ul);
 
-  while (solve() == l_True) {
+  if (getStopSearchFlag()) {
+    printf("%sstopSearch has been set to true, another thread requested to "
+           "stop the search. Stopping search now...\n",
+           getSolverId().c_str());
+    return false;
+  }
+
+  while ((sat = solve()) == l_Undef) {
+    shareClauses();
+    shareSolutions(getShareSolutions());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
+      return false;
+    }
+  }
+  while (sat == l_True) {
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
       blockStep(solution().yPoint());
-      printf("c o ");
-      std::cout << solution().yPoint() << std::endl;
+      std::ostringstream oss;
+      oss << solution().yPoint();
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
       runtime = cpuTime();
-      printf("c new optimal solution (time: %.3f)\n", runtime - initialTime);
+      printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
+             runtime - initialTime);
+    }
+
+    while ((sat = solve()) == l_Undef) {
+      shareClauses();
+      shareSolutions(getShareSolutions());
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
     }
   }
   if (extendUL(ul))
