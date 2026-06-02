@@ -53,9 +53,9 @@ public:
 
     std::vector<openwbo::Solution::OneSolution> result = {};
 
-    pushSolutions(candidates, thread_id);
     if (alsoPull)
       result = pullSolutions(thread_id);
+    pushSolutions(candidates, thread_id);
 
     auto t_end = clock::now();
 
@@ -114,13 +114,18 @@ public:
       if (skip)
         continue;
 
-      toAdd.push_back({cCopy, lastUpdateTime, thread_id});
+      toAdd.push_back({cCopy, 0, thread_id});
     }
 
     size_t i = 0;
     std::erase_if(sharedSolutions, [&](const auto &) { return toRemove[i++]; });
+    if (!toAdd.empty()) {
+      size_t batchTs = ++lastUpdateTime;
+      for (auto &taggedSol : toAdd)
+        taggedSol.ts = batchTs;
+    }
     sharedSolutions.insert(sharedSolutions.end(), toAdd.begin(), toAdd.end());
-    solverTimestamps[thread_id] = lastUpdateTime++;
+    solverTimestamps[thread_id] = lastUpdateTime;
 
     auto t_end = clock::now();
 
@@ -142,7 +147,8 @@ public:
     auto t_start = clock::now();
     std::vector<openwbo::Solution::OneSolution> result;
     for (const auto &tsSol : sharedSolutions)
-      if (solverTimestamps[thread_id] < tsSol.ts)
+      if (tsSol.added_by_thread != thread_id &&
+          solverTimestamps[thread_id] < tsSol.ts)
         result.push_back(tsSol.sol);
 
     auto t_end = clock::now();
