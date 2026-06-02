@@ -94,6 +94,8 @@ bool SlideDrillMO::drill() {
 
     // look for the first queued element that is not optimal
     while ((sat = solve()) != l_Undef) {
+      printf("%sc budget exhausted during drill. Retrying...\n",
+             getSolverId().c_str());
       shareSolutions(getShareSolutions());
       shareClauses();
       if (getStopSearchFlag()) {
@@ -290,6 +292,8 @@ bool SlideDrillMO::slide() {
   Node &n{n_it->second};
   do {
     while ((sat = solve()) == l_Undef) {
+      printf("%sc budget exhausted during drill. Retrying...\n",
+             getSolverId().c_str());
       shareSolutions(getShareSolutions());
       shareClauses();
       if (getStopSearchFlag()) {

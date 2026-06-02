@@ -58,6 +58,7 @@ newHarvest:
   }
 
   while ((sat = solve()) == l_Undef) {
+    printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
     if (getStopSearchFlag()) {
       printf("%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
@@ -102,6 +103,7 @@ newHarvest:
     }
 
     while ((sat = solve()) == l_Undef) {
+      printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
       if (getStopSearchFlag()) {
         printf("%sstopSearch has been set to true, another thread requested to "
                "stop the search. Stopping search now...\n",

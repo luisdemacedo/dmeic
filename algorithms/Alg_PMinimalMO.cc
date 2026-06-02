@@ -109,6 +109,8 @@ bool PMinimalMO::searchPMinimalMO() {
   shareSolutions(getShareSolutions());
   auto sat = solve();
   while (sat == l_Undef) {
+    printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
+
     if (getStopSearchFlag()) {
       DLOG(stdout,
            "%sstopSearch has been set to true, another thread requested to "
@@ -158,6 +160,7 @@ bool PMinimalMO::searchPMinimalMO() {
       shareSolutions(getShareSolutions());
       sat = solve();
       while (sat == l_Undef) {
+        printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
         if (getStopSearchFlag()) {
           DLOG(stdout,
                "%sstopSearch has been set to true, another thread requested "
@@ -179,6 +182,7 @@ bool PMinimalMO::searchPMinimalMO() {
     shareSolutions(getShareSolutions());
     sat = solve();
     while (sat == l_Undef) {
+      printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
       if (getStopSearchFlag()) {
         DLOG(stdout,
              "%sstopSearch has been set to true, another thread requested to "

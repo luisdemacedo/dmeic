@@ -102,6 +102,7 @@ newHarvest:
   }
 
   while ((sat = solve()) == l_Undef) {
+    printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
     shareClauses();
     shareSolutions(getShareSolutions());
     if (getStopSearchFlag()) {
@@ -126,6 +127,7 @@ newHarvest:
     }
 
     while ((sat = solve()) == l_Undef) {
+      printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
       shareClauses();
       shareSolutions(getShareSolutions());
       if (getStopSearchFlag()) {
@@ -163,7 +165,35 @@ newHarvest:
   for (auto &el : blocking_vars)
     assumptions.push(Glucose::mkLit(el.first, false));
   assumeDominatingRegion(ul);
-  while ((sat = solve()) == l_True) {
+  sat = solve();
+
+  while (sat == l_Undef) {
+    printf("%sbudget exhausted. Retrying...\n", getSolverId().c_str());
+    shareClauses();
+    shareSolutions(getShareSolutions());
+    if (getStopSearchFlag()) {
+      printf("%sstopSearch has been set to true, another thread requested to "
+             "stop the search. Stopping search now...\n",
+             getSolverId().c_str());
+      return false;
+    }
+    sat = solve();
+  }
+  while (sat == l_True) {
+
+    while (sat == l_Undef) {
+      printf("%sbudget exhausted. Retrying...\n", getSolverId().c_str());
+      shareClauses();
+      shareSolutions(getShareSolutions());
+      if (getStopSearchFlag()) {
+        printf("%sstopSearch has been set to true, another thread requested to "
+               "stop the search. Stopping search now...\n",
+               getSolverId().c_str());
+        return false;
+      }
+      sat = solve();
+    }
+
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
