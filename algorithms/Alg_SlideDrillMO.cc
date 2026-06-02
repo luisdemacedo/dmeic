@@ -93,7 +93,7 @@ bool SlideDrillMO::drill() {
     }
 
     // look for the first queued element that is not optimal
-    while ((sat = solve()) != l_Undef) {
+    while ((sat = solve()) == l_Undef) {
       printf("%sc budget exhausted during drill. Retrying...\n",
              getSolverId().c_str());
       shareSolutions(getShareSolutions());
@@ -106,7 +106,7 @@ bool SlideDrillMO::drill() {
       }
     }
 
-    if ((sat = solve()) != l_False) {
+    if (sat != l_False) {
       break;
     } else {
       // describe_core(solver->conflict);
@@ -303,6 +303,9 @@ bool SlideDrillMO::slide() {
         return false;
       }
     }
+    if (sat != l_True)
+      break;
+
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
