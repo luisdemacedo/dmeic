@@ -78,7 +78,7 @@ void PMinimalMO::search_MO() {
       clearLowerBoundSet();
   }
 
-  if (solution().size() == 0)
+  if (solution().size() == 0 && !hasSharedSolutions())
     answerType = _UNSATISFIABLE_;
 
   requestStopSearch();

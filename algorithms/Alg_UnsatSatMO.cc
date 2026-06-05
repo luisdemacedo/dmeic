@@ -64,7 +64,7 @@ void UnsatSatMO::search_MO() {
 
   printf("%sc Done searching\n", getSolverId().c_str());
   PBtoCNF::consolidateSolution();
-  if (solution().size() > 0) {
+  if (solution().size() > 0 || hasSharedSolutions()) {
     answerType = _OPTIMUM_;
   } else {
     answerType = _UNSATISFIABLE_;
@@ -303,7 +303,7 @@ bool UnsatSatIncMO::searchUnsatSatMO() {
   assumptions.clear();
 
   if (res)
-    if (solution().size() == 0) {
+    if (solution().size() == 0 && !hasSharedSolutions()) {
       answerType = _UNSATISFIABLE_;
     } else
       answerType = _OPTIMUM_;
@@ -331,7 +331,7 @@ bool UnsatSatIncXsMO::searchUnsatSatMO() {
       ul = dom;
     rootedSearch(ul);
   }
-  if (solution().size() == 0) {
+  if (solution().size() == 0 && !hasSharedSolutions()) {
     answerType = _UNSATISFIABLE_;
     return false;
   } else {
@@ -351,7 +351,7 @@ bool UnsatSatMO::searchUnsatSatMO() {
   if (pareto::dominates(ul, dom))
     ul = dom;
   rootedSearch(ul);
-  if (solution().size() == 0) {
+  if (solution().size() == 0 && !hasSharedSolutions()) {
     answerType = _UNSATISFIABLE_;
     return false;
   } else {

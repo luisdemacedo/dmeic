@@ -265,6 +265,7 @@ protected:
 
   void shareClauses();
   void shareSolutions(bool alsoPull);
+  bool hasSharedSolutions();
   bool isInsidePortfolio() {
     return _stopSearch || _shareClauses || _shareSolutions || printResultsLock;
   }

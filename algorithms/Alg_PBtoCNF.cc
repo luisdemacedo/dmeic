@@ -1770,6 +1770,11 @@ void PBtoCNF::shareSolutions(bool alsoPull) {
   }
 }
 
+bool PBtoCNF::hasSharedSolutions() {
+  return getShareSolutions() && sharedSolutions &&
+         !sharedSolutions->getSolutions().empty();
+}
+
 void PBtoCNF::setMyOutputFiles(const char *file) {
   MOCO::setMyOutputFiles(file);
   if (file != NULL) {

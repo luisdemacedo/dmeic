@@ -33,7 +33,7 @@ public:
 
       consolidateSolution();
       if (res == _OPTIMUM_ || res == _UNSATISFIABLE_)
-        if (solution().size() == 0)
+        if (solution().size() == 0 && !hasSharedSolutions())
           answerType = _UNSATISFIABLE_;
         else
           answerType = _OPTIMUM_;
