@@ -35,6 +35,8 @@ void PortfolioMO::interruptSolver() {
 }
 
 void PortfolioMO::printAnswer(int type) {
+  if (!getShareSolutions() && !getShareClauses())
+    return;
   std::unique_lock<std::mutex> lock(*printResultsLock);
   if (verbosity > 0 && print)
     printStats();
@@ -180,6 +182,7 @@ void PortfolioMO::printStats() {
   fprintf(f, "c lobjstats     obj nvars nclauses nrootvars\n");
   updateStats();
 
+  std::cout << "c ------- " << std::endl;
   fprintf(f,
           "clrunstats     %18s %12s %12s %12s %12s %12s %18s %18s %18s %20s "
           "%18s %8s %8s\n",
@@ -187,7 +190,6 @@ void PortfolioMO::printStats() {
           "n_prob_vars", "n_prob_clauses", "n_enc_vars(sum)",
           "n_enc_clauses(sum)", "n_enc_rootvars(sum)", "n_reencodes", "rapprox",
           "nobj");
-  std::cout << "c ------- " << std::endl;
   for (size_t idx = 0; idx < _portfolio.size(); idx++) {
     fprintf(f,
             "crunstats %4s %18d %12d %12d %12d %12d %12d %18d %18d %18d %20d "

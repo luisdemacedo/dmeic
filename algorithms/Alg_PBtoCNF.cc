@@ -1220,149 +1220,61 @@ void PBtoCNF::printSmallestModel() {
   printf("\n");
 }
 
-// Prints search statistics.
-void PBtoCNF::printStats() {
-  // double totalTime = cpuTime();
-
-  FILE *f = stdout;
-  if (!isInsidePortfolio() || !getShareSolutions()) {
-    fprintf(f, "%sc\n", getSolverId().c_str());
-    // fprintf(f, " c  Best solution:          %12"PRIu64"\n", ubCost);
-    // fprintf(f, " c  Total time:             %12.2f s\n",totalTime -
-    // initialTime);
-    fprintf(f, "%sc  Nb SAT solver calls:    %12d\n", getSolverId().c_str(),
-            nbSatCalls);
-    fprintf(f, "%sc  Nb SAT calls:           %12d\n", getSolverId().c_str(),
-            nbSatisfiable);
-    fprintf(f, "%sc  Nb UNSAT calls:         %12d\n", getSolverId().c_str(),
-            nbSatCalls - nbSatisfiable);
-    fprintf(f, "%sc  Nb MCS:                 %12d\n", getSolverId().c_str(),
-            nbMCS);
-    fprintf(f, "%sc  Smallest MCS:           %12ld\n", getSolverId().c_str(),
-            _smallestMCS);
-    fprintf(f, "%sc  Lower Bound:            %12ld\n", getSolverId().c_str(),
-            _lbWeight);
-    // fprintf("f, c  Average core size:      %12.2f\n",
-    // (float)sumSizeCores/nbCores);
-    fprintf(f, "%sc\n", getSolverId().c_str());
-  }
-
-  if (getShareClauses()) {
-    fprintf(f, "cclausesharingstats %20s %20s %20s %20s %20s %22s %24s %24s\n",
-            "nsynccalls", "nnonempty_pushes", "nnonempty_grabs",
-            "nclauses_pushed", "nclauses_grabbed", "nclauses_filtered_out",
-            "time_spent_syncing (ms)", "time_waiting_lock (ms)");
-    for (size_t idx = 0; idx < sharedLearntClauses->getNumWorkers(); idx++) {
-      auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedLearntClauses->getSyncTime(idx));
-      auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedLearntClauses->getLockWaitTime(idx));
-
-      fprintf(f,
-              "%-20s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
-              "%24lld\n",
-              ("solver" + std::to_string(idx)).c_str(),
-              sharedLearntClauses->getSyncs(idx),
-              sharedLearntClauses->getNonemptyPushes(idx),
-              sharedLearntClauses->getNonemptyGrabs(idx),
-              sharedLearntClauses->getClausesPushed(idx),
-              sharedLearntClauses->getClausesGrabbed(idx),
-              sharedLearntClauses->getClausesFilteredOut(idx),
-              static_cast<long long>(syncTime.count()),
-              static_cast<long long>(lockWaitTime.count()));
-    }
-
-    fprintf(f, "cclausesharingstats %16s %16s %20s\n", "largest_push",
-            "largest_grab", "most_clauses_in_bag");
-    fprintf(f, "cclausesharingstats %16zu %16zu %20zu\n",
-            sharedLearntClauses->getLargestPush(),
-            sharedLearntClauses->getLargestGrab(),
-            sharedLearntClauses->getMostClausesInBag());
-  }
-
-  if (getShareClauses() || getShareSolutions()) {
-    fprintf(f, "csolutionsharingstats %20s %20s %24s %24s %20s %20s\n",
-            "nsols_pushed", "nsols_grabbed", "time_spent_syncing (ms)",
-            "time_waiting_lock (ms)", "time_pulling (ms)", "time_pushing (ms)");
-
-    for (size_t idx = 0; idx < sharedSolutions->getNumWorkers(); idx++) {
-      auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedSolutions->getSyncTime(idx));
-      auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedSolutions->getLockWaitTime(idx));
-      auto pullTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedSolutions->getPullTime(idx));
-      auto pushTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-          sharedSolutions->getPushTime(idx));
-      fprintf(f, "%-20s %20zu %20zu %24lld %24lld %20lld %20lld\n",
-              ("solver" + std::to_string(idx)).c_str(),
-              sharedSolutions->getSolutionsPushed(idx),
-              sharedSolutions->getSolutionsPulled(idx),
-              static_cast<long long>(syncTime.count()),
-              static_cast<long long>(lockWaitTime.count()),
-              static_cast<long long>(pullTime.count()),
-              static_cast<long long>(pushTime.count()));
-    }
-  }
-}
-
 // Prints the corresponding answer.
 void PBtoCNF::printAnswer(int type) {
-  if (!isInsidePortfolio())
-    MOCO::printAnswer(type);
-
   // Inside portfolio
-  std::unique_lock<std::mutex> lock(*printResultsLock);
   if (!getShareClauses() && !getShareSolutions()) {
-    MOCO::printAnswer(type);
+    std::unique_lock<std::mutex> lock(*printResultsLock);
   }
-  // Otherwise, solutions are in shared memory
-  switch (answerType) {
-  case _SATISFIABLE_:
-    printf("s SATISFIABLE\n");
-    printSolutions();
-    printStats();
-    break;
-
-  case _OPTIMUM_:
-    printf("s OPTIMUM FOUND\n");
-    printSolutions();
-    printStats();
-    break;
-  case _UNSATISFIABLE_:
-    printf("s UNSATISFIABLE\n");
-    break;
-  case _UNKNOWN_:
-    printf("s UNKNOWN\n");
-    break;
-  case _INTERRUPTED_:
-    printf("s INTERRUPTED\n");
-    printSolutions();
-    printStats();
-    break;
-  case _MEMOUT_:
-    printf("s MEMOUT\n");
-    printSolutions();
-    printStats();
-    break;
-  default:
-    printf("c Error: Invalid answer type.\n");
-    break;
-  }
-  exit(type);
+  MOCO::printAnswer(type);
+  // switch (answerType) {
+  // case _SATISFIABLE_:
+  //   printf("s SATISFIABLE\n");
+  //   printSolutions();
+  //   printStats();
+  //   break;
+  //
+  // case _OPTIMUM_:
+  //   printf("s OPTIMUM FOUND\n");
+  //   printSolutions();
+  //   printStats();
+  //   break;
+  // case _UNSATISFIABLE_:
+  //   printf("s UNSATISFIABLE\n");
+  //   break;
+  // case _UNKNOWN_:
+  //   printf("s UNKNOWN\n");
+  //   break;
+  // case _INTERRUPTED_:
+  //   printf("s INTERRUPTED\n");
+  //   printSolutions();
+  //   printStats();
+  //   break;
+  // case _MEMOUT_:
+  //   printf("s MEMOUT\n");
+  //   printSolutions();
+  //   printStats();
+  //   break;
+  // default:
+  //   printf("c Error: Invalid answer type.\n");
+  //   break;
+  // }
+  // exit(type);
 }
 
-void PBtoCNF::printSolutions() { // TODO: Allow printing to a file
-
-  FILE *f = stdout;
-
-  auto sols = sharedSolutions->getSolutions();
+void PBtoCNF::printSolutions() {
+  std::ostream &f = std::cout;
+  std::ofstream file;
 
   if (print_model) {
-    fprintf(f, "c -------- Portfolio models (%zu):\n", sols.size());
-    for (auto &[t_id, sol] : sols) {
-      Model m = sol.model();
-      std::string line = "[s" + std::to_string(t_id) + "] v";
+    file.open(effsols_file);
+    std::ostream &out =
+        (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+    // Models
+    for (auto &[_, sol] : solution()) {
+      auto osol = sol.first;
+      Model m = osol.model();
+      std::string line = "v";
       for (int i = 0; i < maxsat_formula->nVars(); i++) {
         indexMap::const_iterator it = maxsat_formula->getIndexToName().find(i);
         if (it != maxsat_formula->getIndexToName().end()) {
@@ -1374,34 +1286,57 @@ void PBtoCNF::printSolutions() { // TODO: Allow printing to a file
           line += it->second;
         }
       }
-      fprintf(f, "%s\n", line.c_str());
+      std::osyncstream(out) << line << "\n";
     }
-    fprintf(f, "c --- End of models\n");
   }
+  std::osyncstream(std::cout)
+      << "c " << solution().size() << " (efficient) solutions" << "\n";
+  std::cout << "c ------- " << std::endl;
+  std::cout << "c pts of transformed prob" << std::endl;
+  for (auto &[_, sol] : solution()) {
+    auto osol = sol.first;
+    std::string line = "c pt";
+    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
+      line += " " + std::to_string(osol.yPoint()[i]);
+    std::osyncstream(f) << line << "\n";
+  }
+  std::cout << "c ------- " << std::endl;
+  std::osyncstream(std::cout)
+      << "c " << solution().size() << " points T" << "\n";
+  std::cout << "c ------- " << std::endl;
+  std::cout << "c lower bound set of transformed prob" << std::endl;
+  for (size_t i = 0; i < LBset.size(); i++) {
+    std::string line = "c lb";
+    for (int di = 0; di < maxsat_formula->nObjFunctions(); di++)
+      line += " " + std::to_string(LBset[i][di]);
+    std::osyncstream(f) << line << "\n";
+  }
+  std::cout << "c ------- " << std::endl;
+  std::osyncstream(std::cout) << "c " << LBset.size() << " lbs T" << "\n";
+  std::cout << "c ------- " << std::endl;
 
-  fprintf(f, "c Objective values:\n");
-  fprintf(f, "c Portfolio objv (%zu):\n", sols.size());
-  for (auto &[t_id, sol] : sols) {
-    std::string line = "c [s" + std::to_string(t_id) + "] pt";
+  // TODO: LBSet to file
+
+  file.open(objv_file);
+  std::ostream &out =
+      (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+
+  for (auto &[_, sol] : solution()) {
+    auto osol = sol.first;
+    std::string line = "o";
     for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
-      line += " " + std::to_string(sol.yPoint()[i]);
-    fprintf(f, "%s\n", line.c_str());
-  }
-  fprintf(f, "c End of objective values\n");
-  fprintf(f, "c -------\n");
-  for (auto &[t_id, sol] : sols) {
-    std::string line = "c [s" + std::to_string(t_id) + "] pt";
-    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
-      line += " " + std::to_string((int64_t)sol.yPoint()[i] +
+      line += " " + std::to_string((int64_t)osol.yPoint()[i] +
                                    getFormula()->getObjFunction(i)->_const);
-    fprintf(f, "%s\n", line.c_str());
+    std::osyncstream(out) << line << "\n";
   }
-  fprintf(f, "c %zu nondominated points\n", sols.size());
+  std::osyncstream(std::cout)
+      << "c " << solution().size() << " nondominated points" << "\n";
   std::string line = "c _consts:";
-  for (int di = 0; di < getFormula()->nObjFunctions(); di++)
-    line += " " + std::to_string(getFormula()->getObjFunction(di)->_const);
-  fprintf(f, "%s\n", line.c_str());
+  for (size_t i = 0; i < getFormula()->nObjFunctions(); i++)
+    line += " " + std::to_string(getFormula()->getObjFunction(i)->_const);
+  std::osyncstream(std::cout) << line << "\n";
 }
+
 /************************************************************************************************
  //
  // Other protected methods

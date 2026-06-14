@@ -165,7 +165,7 @@ protected:
 
   void printAnswer(int type) override;
 
-  void printStats() override;
+  void printStats();
 
   void printSolutions();
 

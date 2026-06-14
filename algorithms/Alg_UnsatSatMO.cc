@@ -72,7 +72,7 @@ void UnsatSatMO::search_MO() {
 
   requestStopSearch();
   shareSolutions(getShareSolutions());
-  if (!isInsidePortfolio() || !getShareSolutions())
+  if (!isInsidePortfolio() || (!getShareSolutions() && !getShareClauses()))
     printAnswer(answerType);
 }
 

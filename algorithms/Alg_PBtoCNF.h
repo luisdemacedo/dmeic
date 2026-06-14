@@ -21,6 +21,7 @@
 #include "omp.h"
 #include "utils/System.h"
 #include <atomic>
+#include <fstream>
 #include <map>
 #include <set>
 #include <utility>
@@ -231,7 +232,6 @@ protected:
   //
   void printModel();         // Print the last model.
   void printSmallestModel(); // Print the best satisfying model.
-  virtual void printStats(); // Print search statistics.
 
   // Other utils
   bool satisfiedSoft(int i);
