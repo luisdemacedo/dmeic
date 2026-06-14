@@ -104,6 +104,11 @@ public:
     optim->setShareClauses(share);
   }
 
+  void setInitialTime(double initialTime) override {
+    PBtoCNF::setInitialTime(initialTime);
+    optim->setInitialTime(initialTime);
+  }
+
   void setClauseSharingHeuristic(
       clausesharing::IClauseSharingHeuristic *heuristic) override {
     PBtoCNF::setClauseSharingHeuristic(heuristic);

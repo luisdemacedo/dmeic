@@ -15,6 +15,7 @@ using NSPACE::vec;
 namespace clausesharing {
 class IClauseSharingHeuristic {
 public:
+  virtual ~IClauseSharingHeuristic() = default;
   virtual std::vector<vec<Lit>>
   filter(const std::vector<vec<Lit>> &sharedClauses) = 0;
 };

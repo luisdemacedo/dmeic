@@ -5,6 +5,9 @@ void SlideDrillMO::search_MO() {
   build();
   answerType = _UNSATISFIABLE_;
   if (firstSolution()) {
+    runtime = cpuTime();
+    timestats[_time1stSol_] = runtime - initialTime;
+    runstats[_nsatcalls1stSol_] = nbSatisfiable;
     updateMOFormulation();
     blockDominatedRegion(first.yPoint());
     Model m = make_model(solver->model);

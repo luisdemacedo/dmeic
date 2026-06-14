@@ -12,6 +12,8 @@
 #include "./Alg_PBtoCNF.h"
 #include "utils/Options.h"
 #include "utils/System.h"
+#include <format>
+#include <fstream>
 #include <map>
 #include <omp.h>
 #include <set>
@@ -56,7 +58,7 @@ public:
     for (auto &solver : _portfolio)
       solver->setStopSearchFlag(_stopSearch);
 
-    sharedSolutions = std::make_shared<solutionsharing::SharedSolutionsVector>(
+    sharedSolutions = std::make_shared<solutionsharing::SharedSolutionsArchive>(
         _portfolio.size());
     setSharedSolutionsSet(sharedSolutions);
 
@@ -80,6 +82,8 @@ public:
   void interruptSolver() override;
 
   void setPrintModel(bool model) override { MOCO::setPrintModel(model); }
+
+  void updateStats() override;
 
 protected:
   void setInitialTime(double initial) override {
@@ -158,6 +162,12 @@ protected:
     for (auto &solver : _portfolio)
       solver->setPrintResultsLock(lock);
   }
+
+  void printAnswer(int type) override;
+
+  void printStats() override;
+
+  void printSolutions();
 
 private:
   std::vector<PBtoCNF *> _portfolio;

@@ -104,6 +104,12 @@ function main(){
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=29 -pbobjf=4 -eps=1  -core_optim=2 \
 			    -apmode=1 -no-cubounds -no-clbounds $instance $conf_budget ;;
 
+	parpmin)
+		         # gdb --args \
+	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+			    -formula=1 -geo_p=1 -no-block_below -algorithm=30 -pbobjf=4 -eps=1  -core_optim=2 \
+			    -apmode=1 -no-cubounds -no-clbounds -conf_budget=$conf_budget -wl_type=$wl_type $instance ;;
+
    *)
 	echo "Check name of the algorithm to run: \"$1\" is not valid."
 	exit 1;;

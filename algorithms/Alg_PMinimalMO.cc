@@ -140,6 +140,10 @@ bool PMinimalMO::searchPMinimalMO() {
         return false;
       }
 
+      if (solution().size() == 0) {
+        timestats[_time1stSol_] = cpuTime() - initialTime;
+        runstats[_nsatcalls1stSol_] = nbSatisfiable;
+      }
       Model m = make_model(solver->model);
       solution().pushSafe(m);
       ul = solution().yPoint();

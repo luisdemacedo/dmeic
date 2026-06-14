@@ -3,6 +3,275 @@
 using namespace openwbo;
 using NSPACE::toLit;
 
+StatusCode ParallelMO::search() {
+  search_MO();
+  printf("done\n");
+  for (auto &w : workers)
+    w.solver->budgetOff();
+  return answerType;
+}
+
+// TODO: add stats
+void ParallelMO::printStats() {
+  // double totalTime = cpuTime();
+
+  FILE *f = stdout;
+
+  // if (getShareClauses()) {
+  fprintf(f, "cclausesharingstats %20s %20s %20s %20s %20s %22s %24s %24s\n",
+          "nsynccalls", "nnonempty_pushes", "nnonempty_grabs",
+          "nclauses_pushed", "nclauses_grabbed", "nclauses_filtered_out",
+          "time_spent_syncing (ms)", "time_waiting_lock (ms)");
+  for (size_t idx = 0; idx < sharedLearntClauses->getNumWorkers(); idx++) {
+    auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedLearntClauses->getSyncTime(idx));
+    auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedLearntClauses->getLockWaitTime(idx));
+
+    fprintf(f,
+            "%-20s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
+            "%24lld\n",
+            ("solver" + std::to_string(idx)).c_str(),
+            sharedLearntClauses->getSyncs(idx),
+            sharedLearntClauses->getNonemptyPushes(idx),
+            sharedLearntClauses->getNonemptyGrabs(idx),
+            sharedLearntClauses->getClausesPushed(idx),
+            sharedLearntClauses->getClausesGrabbed(idx),
+            sharedLearntClauses->getClausesFilteredOut(idx),
+            static_cast<long long>(syncTime.count()),
+            static_cast<long long>(lockWaitTime.count()));
+  }
+
+  fprintf(f, "cclausesharingstats %16s %16s %20s\n", "largest_push",
+          "largest_grab", "most_clauses_in_bag");
+  fprintf(f, "cclausesharingstats %16zu %16zu %20zu\n",
+          sharedLearntClauses->getLargestPush(),
+          sharedLearntClauses->getLargestGrab(),
+          sharedLearntClauses->getMostClausesInBag());
+  // }
+
+  fprintf(f, "csolutionsharingstats %20s %20s %24s %24s %20s %20s\n",
+          "nsols_pushed", "nsols_grabbed", "time_spent_syncing (ms)",
+          "time_waiting_lock (ms)", "time_pulling (ms)", "time_pushing (ms)");
+
+  for (size_t idx = 0; idx < sharedSolutions->getNumWorkers(); idx++) {
+    auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedSolutions->getSyncTime(idx));
+    auto lockWaitTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedSolutions->getLockWaitTime(idx));
+    auto pullTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedSolutions->getPullTime(idx));
+    auto pushTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        sharedSolutions->getPushTime(idx));
+    fprintf(f, "%-20s %20zu %20zu %24lld %24lld %20lld %20lld\n",
+            ("solver" + std::to_string(idx)).c_str(),
+            sharedSolutions->getSolutionsPushed(idx),
+            sharedSolutions->getSolutionsPulled(idx),
+            static_cast<long long>(syncTime.count()),
+            static_cast<long long>(lockWaitTime.count()),
+            static_cast<long long>(pullTime.count()),
+            static_cast<long long>(pushTime.count()));
+  }
+}
+
+void ParallelMO::printAnswer(int type) {
+  if (verbosity > 0 && print)
+    printStats();
+  printf("c ---------- OUTPUT ---------------\n");
+
+  if (!print)
+    return;
+
+  switch (type) {
+  case _SATISFIABLE_:
+    printf("s SATISFIABLE\n");
+    printSolutions();
+    printStats();
+    break;
+  case _OPTIMUM_:
+    printf("s OPTIMUM\n");
+    printSolutions();
+    printApproxRatio();
+    printStats();
+    break;
+  case _UNSATISFIABLE_:
+    printf("s UNSATISFIABLE\n");
+    break;
+  case _UNKNOWN_:
+    printf("s UNKNOWN\n");
+    break;
+  case _INTERRUPTED_:
+    printf("s INTERRUPTED\n");
+    printSolutions();
+    printStats();
+    break;
+  case _MEMOUT_:
+    printf("s MEMOUT\n");
+    printSolutions();
+    printStats();
+    break;
+  default:
+    printf("c Error: Invalid answer type.\n");
+    printStats();
+    break;
+  }
+}
+
+void ParallelMO::printSolutions() {
+  std::ostream &f = std::cout;
+  std::ofstream file;
+  auto sols = sharedSolutions->getSolutions();
+  if (print_model) {
+    file.open(effsols_file);
+    std::ostream &out =
+        (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+    // Models
+    for (auto &[t_id, sol] : sols) {
+      Model m = sol.model();
+      std::string line = "v [s" + std::to_string(t_id) + "]";
+      for (int i = 0; i < maxsat_formula->nVars(); i++) {
+        indexMap::const_iterator it = maxsat_formula->getIndexToName().find(i);
+        if (it != maxsat_formula->getIndexToName().end()) {
+          line += " ";
+          if (m[i] == l_True)
+            line += " ";
+          else
+            line += "-";
+          line += it->second;
+        }
+      }
+      std::osyncstream(out) << line << "\n";
+    }
+  }
+  std::osyncstream(std::cout)
+      << "c " << sols.size() << " (efficient) solutions" << "\n";
+  std::cout << "c ------- " << std::endl;
+  std::cout << "c pts of transformed prob" << std::endl;
+  for (auto &[t_id, sol] : sols) {
+    std::string line = "c [s" + std::to_string(t_id) + "] pt";
+    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
+      line += " " + std::to_string(sol.yPoint()[i]);
+    std::osyncstream(f) << line << "\n";
+  }
+  std::cout << "c ------- " << std::endl;
+  std::osyncstream(std::cout) << "c " << sols.size() << " points T" << "\n";
+  std::cout << "c ------- " << std::endl;
+  std::cout << "c lower bound set of transformed prob" << std::endl;
+  for (size_t i = 0; i < LBset.size(); i++) {
+    std::string line = "c lb";
+    for (int di = 0; di < maxsat_formula->nObjFunctions(); di++)
+      line += " " + std::to_string(LBset[i][di]);
+    std::osyncstream(f) << line << "\n";
+  }
+  std::cout << "c ------- " << std::endl;
+  std::osyncstream(std::cout) << "c " << LBset.size() << " lbs T" << "\n";
+  std::cout << "c ------- " << std::endl;
+
+  // TODO: LBSet to file
+
+  file.open(objv_file);
+  std::ostream &out =
+      (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+
+  for (auto &[t_id, sol] : sols) {
+    std::string line = "o [s" + std::to_string(t_id) + "]";
+    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
+      line += " " + std::to_string((int64_t)sol.yPoint()[i] +
+                                   getFormula()->getObjFunction(i)->_const);
+    std::osyncstream(out) << line << "\n";
+  }
+  std::osyncstream(std::cout)
+      << "c " << sols.size() << " nondominated points" << "\n";
+  std::string line = "c _consts:";
+  for (size_t i = 0; i < getFormula()->nObjFunctions(); i++)
+    line += " " + std::to_string(getFormula()->getObjFunction(i)->_const);
+  std::osyncstream(std::cout) << line << "\n";
+}
+void ParallelMO::buildSolversMO() {
+  DLOG(stdout,
+       "c [ParallelMO] buildSolversMO -- nVars: "
+       "%d nHard: %d nSoft: %d nPB: %d nObj: %d\n",
+       getFormula()->nVars(), getFormula()->nHard(), getFormula()->nSoft(),
+       getFormula()->nPB(), getFormula()->nObjFunctions());
+  for (auto &w : workers) {
+    printf("c Building solver\n");
+    vec<bool> seen;
+    seen.growTo(getFormula()->nVars(), false);
+
+    w.solver = newSATSolver();
+
+    for (int i = 0; i < getFormula()->nVars(); i++)
+      newSATVariable(w.solver);
+
+    for (int i = 0; i < getFormula()->nHard(); i++)
+      w.solver->addClause(getFormula()->getHardClause(i).clause);
+
+    //  printf("c Encode PB constraints\n");
+
+    for (int i = 0; i < getFormula()->nPB(); i++) {
+      encoding::Encoder *enc = new encoding::Encoder(
+          _INCREMENTAL_NONE_, encoding, _AMO_LADDER_, pb_encoding);
+
+      assert(getFormula()->getPBConstraint(i)->_sign);
+
+      enc->encodePB(w.solver, getFormula()->getPBConstraint(i)->_lits,
+                    getFormula()->getPBConstraint(i)->_coeffs,
+                    getFormula()->getPBConstraint(i)->_rhs);
+      delete enc;
+    }
+
+    //  printf("c Encode cardinality constraints\n");
+    for (int i = 0; i < getFormula()->nCard(); i++) {
+      encoding::Encoder *enc = new encoding::Encoder(
+          _INCREMENTAL_NONE_, encoding, _AMO_LADDER_, pb_encoding);
+
+      if (getFormula()->getCardinalityConstraint(i)->_rhs == 1) {
+        enc->encodeAMO(w.solver,
+                       getFormula()->getCardinalityConstraint(i)->_lits);
+      } else {
+
+#ifdef __DEBUG__
+        printf(
+            "c [ParallelMO] buildSolversMO encodeCardinality() constraint\n\t");
+        getFormula()->getCardinalityConstraint(i)->my_print(
+            getFormula()->getIndexToName());
+#endif
+
+        enc->encodeCardinality(w.solver,
+                               getFormula()->getCardinalityConstraint(i)->_lits,
+                               getFormula()->getCardinalityConstraint(i)->_rhs);
+      }
+
+      delete enc;
+    }
+
+    vec<Lit> clause;
+    // printf("c Encode soft constraints\n");
+    for (int i = 0; i < getFormula()->nSoft(); i++) {
+      clause.clear();
+      getFormula()->getSoftClause(i).clause.copyTo(clause);
+
+      for (int j = 0; j < getFormula()->getSoftClause(i).relaxation_vars.size();
+           j++) {
+        clause.push(getFormula()->getSoftClause(i).relaxation_vars[j]);
+      }
+
+      w.solver->addClause(clause);
+    }
+
+    // printf("c Encode objective functions\n");
+
+    int nObj = getFormula()->nObjFunctions();
+
+    for (int di = 0; di < nObj; di++)
+      w.fubs[di] = 0;
+    getMaxSATFormula()->setFixedVars({});
+    getMaxSATFormula()->sync_first(w.solver);
+    w.encoder.kpa_fixed_vars(getMaxSATFormula()->fixed_vars());
+    w._nb_encoded_vars_initial = w.solver->nVars();
+  }
+}
+
 void ParallelMO::init() { // Copied from PBtoCNF
   vec<int> vars;
   vars.growTo(getFormula()->nVars(), 0);
@@ -57,7 +326,7 @@ lbool ParallelMO::solve(size_t wid) {
 #else
   if (conflict_limit < 0) {
     w.solver->budgetOff();
-    res = w.solver->solveLimited(w.assumptions);
+    return w.solver->solveLimited(w.assumptions);
   }
 
   // signals the exhaustion of the budget. Reset the limit, and go on
@@ -176,12 +445,14 @@ void ParallelMO::updateMOEncoding(size_t wid) {
           else if (w.encoder.getPBEncoding() == _PB_GTE_)
             rootLits = w.gtes[i].getRootLits();
         }
+#pragma omp barrier
+#pragma omp single
         getFormula()->replaceObjFunction(
             i, make_unique<PBObjFunction>(std::move(pb)));
         int o = 0;
         vec<Lit> clause;
         // order encoding
-        if (enc_is_kp_based(i)) {
+        if (enc_is_kp_based(wid)) {
           ith_orl.clear();
           encoding::wlit_mapt::iterator prev;
           for (encoding::wlit_mapt::iterator rit = rootLits.begin();
@@ -260,7 +531,172 @@ void ParallelMO::updateMOEncoding(size_t wid) {
   // exit(1);
 }
 
-void blockDominatedRegion(size_t solver_id, const YPoint &yp) {
+void ParallelMO::shareSolutions(size_t wid, bool alsoPull) {
+  Worker &w = workers[wid];
+  std::vector<openwbo::Solution::OneSolution> localFront = {};
+
+  for (auto &[_, s] : w.solutions)
+    localFront.push_back(s.first);
+
+  std::vector<openwbo::Solution::OneSolution> receivedFront =
+      sharedSolutions->syncSolutions(localFront, wid, alsoPull);
+
+  for (auto &sol : receivedFront)
+    blockDominatedRegion(wid, sol.yPoint());
+}
+
+void ParallelMO::shareClauses(size_t wid) {
+  // if (!getShareClauses()) TODO
+  // return;
+
+  Worker &w = workers[wid];
+  std::vector<vec<Lit>> clauses = w.solver->getLearntClauses(-1); // 0-indexed
+  std::vector<vec<Lit>> filteredClauses = w.sharingHeuristic->filter(clauses);
+  std::vector<vec<Lit>> receivedClauses =
+      sharedLearntClauses->syncSharedClauses(clauses.size(), filteredClauses,
+                                             wid);
+  w.solver->addLearntClauses(receivedClauses);
+}
+
+/*assumes the region that dominates the point given by objix*/
+void ParallelMO::assumeDominatingRegion(size_t wid, uint64_t *objix, int nObj) {
+  Worker &w = workers[wid];
+  for (int di = 0; di < nObj; di++) {
+    int j = objix[di];
+    if (j > 0) {
+      w.assumptions.push((*w.objRootLits[di])[j].second);
+#ifdef __DEBUG__
+      printf("assume all %d [%lu][var: %d]\n", di,
+             (*w.objRootLits[di])[j].first,
+             var((*w.objRootLits[di])[j].second));
+#endif
+    }
+  }
+}
+
+/*assumes the region that dominates the point given by yp*/
+int ParallelMO::assumeDominatingRegion(size_t wid, const YPoint &yp) {
+  Worker &w = workers[wid];
+  auto nObj = yp.size();
+  YPoint yp1 = yp;
+  uint64_t objix[nObj];
+  int pushed = 0;
+  evalToIndex(wid, yp1, objix);
+  for (YPoint::size_type di = 0; di < nObj; di++) {
+    int j = objix[di];
+    if (j > 0 && j < (int)(*w.objRootLits[di]).size()) {
+      w.assumptions.push((*w.objRootLits[di]).at(j).second);
+      pushed++;
+#ifdef __DEBUG__
+      printf("assume all %d [%lu][var: %d]\n", di,
+             (*w.objRootLits[di])[j].first,
+             var((*w.objRootLits[di])[j].second));
+#endif
+    }
+  }
+  return pushed;
+}
+
+void ParallelMO::blockDominatedRegion(size_t wid, uint64_t *objix, int nObj) {
+  // at least one of the functions will be strictly lower than the
+  // values correspoding to objix. objix should be filled by
+  // evalToIndex.
+
+  Worker &w = workers[wid];
+  vec<Lit> d_cl;
+  for (int di = 0; di < nObj; di++) {
+    int j = objix[di];
+    // the j = 0 entry is never used. Accomplished by the sentinel
+    // placed at the beggining of objRootLits.
+    if (j > 0) {
+      d_cl.push((*w.objRootLits[di])[j].second);
+      //                 printf("block z%d\n",
+      //                 var(w.objRootLits[di][j].second)+1);
+#ifdef __DEBUG__
+      printf("c block %d [%lu][var: %d]\n", di, w.objRootLits[di][j].first,
+             var(w.objRootLits[di][j].second));
+#endif
+    }
+  }
+  w.solver->addClause(d_cl);
+}
+
+void ParallelMO::blockDominatedRegion(size_t solver_id, const YPoint &yp) {
   int nObj = yp.size();
   uint64_t objix[nObj];
+  Worker &w = workers[solver_id];
+
+  // computing the indexes given the objective value. This should be
+  //  abstracted away...  For each objective, find the index of the
+  //  largest key below or equal to each entry in yp, or 0 if no such
+  //  entry exists.
+
+  for (int iObj = 0; iObj < nObj; iObj++) {
+    objix[iObj] = 0;
+    if (w.objRootLits[iObj])
+      for (auto const &el : *w.objRootLits[iObj])
+        if (yp[iObj] >= el.first)
+          objix[iObj]++;
+        else
+          break;
+  }
+  blockDominatedRegion(solver_id, objix, yp.size());
+}
+
+void ParallelMO::evalToIndex(size_t wid, const YPoint &yp, uint64_t *objix) {
+  Worker &w = workers[wid];
+  openwbo::evalToIndex(yp, objix, w.objRootLits);
+}
+
+void ParallelMO::evalToIndex(size_t wid, uint64_t *objv, uint64_t *objix) {
+  Worker &w = workers[wid];
+  for (int di = 0; di < getFormula()->nObjFunctions(); di++) {
+    objix[di] = 0;
+    size_t i = 1;
+    if (w.objRootLits[di] != NULL)
+      while (i <= (*w.objRootLits[di]).size() &&
+             objv[di] >= (*w.objRootLits[di])[i].first) {
+        objix[di] = i;
+        i++;
+      }
+  }
+}
+
+void ParallelMO::printApproxRatio() {
+  int d = getFormula()->nObjFunctions();
+  auto sols = sharedSolutions->getSolutions();
+  auto yPoints = sols | std::views::values |
+                 std::views::transform(&Solution::OneSolution::yPoint);
+  double realeps = 0;
+  double pteps, ptepsi;
+  for (size_t j = 0; j < LBset.size(); j++) {
+    pteps = DBL_MAX;
+    for (size_t i = 0; i < yPoints.size(); i++) {
+      ptepsi = 1;
+      for (int di = 0; di < d; di++) {
+        // se nao for 0 (se for, entao o valor acima e' o minimo da funcao
+        // objectivo di) e se o racio for maior do que dos outros di e se
+        // LB*epsilon > LB+1 (para contemplar os casos em que epsilon_approx <
+        // 2)
+        if (LBset[j][di] > 0 && float(yPoints[i][di]) / LBset[j][di] > ptepsi &&
+            LBset[j][di] * (float(yPoints[i][di]) / LBset[j][di]) >=
+                LBset[j][di] + 1) {
+          ptepsi = float(yPoints[i][di]) / LBset[j][di];
+        }
+      }
+      //             printf("%f < %f ?\n", ptepsi, pteps);
+      if (ptepsi < pteps)
+        pteps = ptepsi;
+    }
+    if (pteps > realeps)
+      realeps = pteps;
+  }
+
+  std::osyncstream(std::cout) << "c ------- " << "\n";
+  std::osyncstream(std::cout) << "c observed and expected ratio" << "\n";
+  std::osyncstream(std::cout) << std::format("c tapprox <= {:.4f}\n", realeps);
+  std::osyncstream(std::cout)
+      << std::format("c eapprox <= {:.4f}\n", expepsilon);
+  std::osyncstream(std::cout) << "c ------- " << "\n";
+  repsilon = realeps;
 }

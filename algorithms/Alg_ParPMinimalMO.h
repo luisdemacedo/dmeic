@@ -35,7 +35,7 @@ public:
   ~ParPMinimalMO() {}
 
   bool searchParPMinimalMO();
-  void search_MO();
+  void search_MO() override;
   void shareSolution(openwbo::Solution::OneSolution osol);
 
 protected:

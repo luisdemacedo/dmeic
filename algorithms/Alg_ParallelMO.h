@@ -13,12 +13,18 @@
 #include "./Alg_PBtoCNF.h"
 #include "omp.h"
 #include "utils/System.h"
+#include <float.h>
+#include <fstream>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <utility>
 #include <vector>
 
+#include "../clausesharing/DequeSharedClausesBag.h"
+#include "../clausesharing/ISharedClausesBag.h"
+#include "../clausesharing/SizeHeuristic.h"
 #include "../encodings/RootLits.h"
 #include "../solutionsharing/ISharedSolutionsSet.h"
 
@@ -50,12 +56,20 @@ public:
 
   // StatusCode search() override;
 
+  StatusCode search() override;
+  virtual void search_MO() = 0;
   void printStats();
   bool updateMOFormulationIfSAT(size_t wid);
   bool updateMOFormulation(size_t wid);
   void init();
   bool firstSolution(); // Sets the worker's first solution and
                         // returns true if one is found.
+
+  std::string getSolverId() override {
+    return "[s" + std::to_string(omp_get_thread_num()) + "] ";
+  }
+  void printAnswer(int type) override;
+  void printSolutions();
 
 protected:
   class Worker {
@@ -76,12 +90,16 @@ protected:
     uint64_t fubs[MAXDIM] = {};
 
     Solution::OneSolution first{};
+    Solution solutions{nullptr};
+    size_t _nb_encoded_vars_initial = 0;
+    std::unique_ptr<clausesharing::IClauseSharingHeuristic> sharingHeuristic =
+        std::make_unique<clausesharing::SizeHeuristic>();
   };
 
   std::vector<Worker> workers;
 
   void initWorkers(size_t n) {
-    // workers.resize(n);
+    workers = std::vector<Worker>(n);
     for (auto &worker : workers) {
       worker.solver = newSATSolver();
       worker.encoder.setCardEncoding(cardinality_encoding);
@@ -91,7 +109,10 @@ protected:
       for (int i = 0; i < getFormula()->nObjFunctions(); i++)
         worker.objRootLits.push_back(
             std::make_shared<rootLits::RootLits>(rootLits::RootLits{}));
+      worker.solutions = Solution(this);
     }
+    sharedSolutions = make_unique<solutionsharing::SharedSolutionsArchive>(n);
+    sharedLearntClauses = make_unique<clausesharing::DequeSharedClausesBag>(n);
   }
 
   bool enc_is_kp_based(size_t wid) {
@@ -100,18 +121,26 @@ protected:
            encoder.getPBEncoding() == _PB_KP_MINISATP_;
   }
 
+  void buildSolversMO();
   lbool solve(size_t worker_id);
   void updateMOEncoding(size_t worker_id);
 
   void blockDominatedRegion(size_t worker_id, const YPoint &yp);
   void blockDominatedRegion(size_t worker_id, uint64_t *objix, int nObj);
-  void assumeDominatingRegion(size_t worker_id, const YPoint &yp);
+  int assumeDominatingRegion(size_t worker_id, const YPoint &yp);
   void assumeDominatingRegion(size_t worker_id, uint64_t *objix, int nObj);
+
+  void shareSolutions(size_t wid, bool alsoPull);
+  void shareClauses(size_t wid);
+
+  void evalToIndex(size_t wid, const YPoint &yp, uint64_t *objix);
+  void evalToIndex(size_t wid, uint64_t *objv, uint64_t *objix);
+
+  void printApproxRatio() override;
 
   // Options
   bool _useAllVars = false;
   int cardinality_encoding;
-  int pb_encoding;
   int pb_objective_encoding;
   int approxMode;
   int conflict_limit = -1;
@@ -130,10 +159,13 @@ protected:
   // MO support
   float epsilon = 1;
   float redFactor = -1;
+  int encoding;
+  int pb_encoding;
 
   StatusCode answerType = _UNKNOWN_;
 
-  std::shared_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
+  std::unique_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
+  std::unique_ptr<clausesharing::ISharedClausesBag> sharedLearntClauses;
 };
 } // namespace openwbo
 

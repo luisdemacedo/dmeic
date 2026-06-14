@@ -166,7 +166,10 @@ lbool PBtoCNF::solve() {
 #else
   if (conflict_limit < 0) {
     solver->budgetOff();
-    return solver->solveLimited(assumptions);
+    res = solver->solveLimited(assumptions);
+    if (res == l_True)
+      nbSatisfiable++;
+    return res;
   }
   // signals the exhaustion of the budget.  Reset the limit, and go on.
   if (nConflicts < 0) {
@@ -1364,7 +1367,6 @@ void PBtoCNF::printSolutions() { // TODO: Allow printing to a file
         indexMap::const_iterator it = maxsat_formula->getIndexToName().find(i);
         if (it != maxsat_formula->getIndexToName().end()) {
           line += " ";
-          fprintf(f, " ");
           if (m[i] == l_True)
             line += " ";
           else
@@ -1386,6 +1388,19 @@ void PBtoCNF::printSolutions() { // TODO: Allow printing to a file
     fprintf(f, "%s\n", line.c_str());
   }
   fprintf(f, "c End of objective values\n");
+  fprintf(f, "c -------\n");
+  for (auto &[t_id, sol] : sols) {
+    std::string line = "c [s" + std::to_string(t_id) + "] pt";
+    for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
+      line += " " + std::to_string((int64_t)sol.yPoint()[i] +
+                                   getFormula()->getObjFunction(i)->_const);
+    fprintf(f, "%s\n", line.c_str());
+  }
+  fprintf(f, "c %zu nondominated points\n", sols.size());
+  std::string line = "c _consts:";
+  for (int di = 0; di < getFormula()->nObjFunctions(); di++)
+    line += " " + std::to_string(getFormula()->getObjFunction(di)->_const);
+  fprintf(f, "%s\n", line.c_str());
 }
 /************************************************************************************************
  //
@@ -1771,8 +1786,7 @@ void PBtoCNF::shareSolutions(bool alsoPull) {
 }
 
 bool PBtoCNF::hasSharedSolutions() {
-  return getShareSolutions() && sharedSolutions &&
-         !sharedSolutions->getSolutions().empty();
+  return getShareSolutions() && sharedSolutions && !sharedSolutions->empty();
 }
 
 void PBtoCNF::setMyOutputFiles(const char *file) {

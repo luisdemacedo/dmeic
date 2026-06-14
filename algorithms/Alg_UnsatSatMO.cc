@@ -116,6 +116,11 @@ newHarvest:
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
+      if (timestats[_time1stSol_] < 0) { // Uninitialized, first solution found
+        runtime = cpuTime();
+        timestats[_time1stSol_] = runtime - initialTime;
+        runstats[_nsatcalls1stSol_] = nbSatisfiable;
+      }
       blockStep(solution().yPoint());
       std::ostringstream oss;
       oss << solution().yPoint();

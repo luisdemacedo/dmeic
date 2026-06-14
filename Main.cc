@@ -65,6 +65,7 @@
 #include "algorithms/Alg_Naive.h"
 #include "algorithms/Alg_OLL.h"
 #include "algorithms/Alg_PMinimalMO.h"
+#include "algorithms/Alg_ParPMinimalMO.h"
 #include "algorithms/Alg_PartMSU3.h"
 #include "algorithms/Alg_UnsatSatBudgetMO.h"
 #include "algorithms/Alg_UnsatSatMO.h"
@@ -113,7 +114,7 @@ static MaxSAT *mxsolver;
 static void SIGINT_exit(int signum) {
   cout << "c current results\n";
   if (mxsolver != NULL)
-    mxsolver->printAnswer(_UNKNOWN_);
+    mxsolver->printAnswer(_INTERRUPTED_);
   else
     cout << "c solver has nothing to report;\n";
   exit(_UNKNOWN_);
@@ -249,8 +250,9 @@ IntOption
               "27=mo-us_list_pmin), "
               "28=drill), " // undocumented
               "29=portfolio), "
+              "30=parpminimal)."
               "\n",
-              7, IntRange(0, 29));
+              7, IntRange(0, 30));
 
 IntOption partition_strategy("PartMSU3", "partition-strategy",
                              "Partition strategy (0=sequential, "
@@ -446,8 +448,7 @@ PBtoCNF *createPortfolioSolver(const PortfolioSolverConfig &solverConfig) {
   int verbosity = solverConfig.getIntOr("verbosity", options::verbosity);
   int weight = solverConfig.getIntOr("weight-strategy", options::weight);
   int partition_strategy =
-      solverConfig.getIntOr("partition-strategy",
-                            options::partition_strategy);
+      solverConfig.getIntOr("partition-strategy", options::partition_strategy);
   int cardinality = solverConfig.getIntOr("cardinality", options::cardinality);
   int pb = solverConfig.getIntOr("pb", options::pb);
   int pbobjf = solverConfig.getIntOr("pbobjf", options::pbobjf);
@@ -471,11 +472,10 @@ PBtoCNF *createPortfolioSolver(const PortfolioSolverConfig &solverConfig) {
     exit(_ERROR_);
   }
 
-  solver->setClauseSharingHeuristic(createClauseSharingHeuristic(
-      solverConfig, options::sharing_heuristic));
+  solver->setClauseSharingHeuristic(
+      createClauseSharingHeuristic(solverConfig, options::sharing_heuristic));
 
-  int conf_budget =
-      solverConfig.getIntOr("conf_budget", options::conf_budget);
+  int conf_budget = solverConfig.getIntOr("conf_budget", options::conf_budget);
   if (conf_budget != -1) {
     solver->setConflictLimit(conf_budget);
   }
@@ -495,12 +495,11 @@ PortfolioMO *createPortfolioMO(const char *filename, int &argc, char **argv) {
 
   parseOptions(argc, argv, true);
 
-  PortfolioMO *portfolio =
-      new PortfolioMO(options::verbosity, options::weight,
-                      options::partition_strategy, options::cardinality,
-                      options::pb, options::pbobjf, solvers,
-                      options::stop_on_first_result, options::share_clauses,
-                      options::share_solutions);
+  PortfolioMO *portfolio = new PortfolioMO(
+      options::verbosity, options::weight, options::partition_strategy,
+      options::cardinality, options::pb, options::pbobjf, solvers,
+      options::stop_on_first_result, options::share_clauses,
+      options::share_solutions);
   portfolio->setPrintModel(options::printmodel);
   return portfolio;
 }
@@ -664,6 +663,10 @@ MaxSAT *buildSolver(int argc, char **argv) {
     S = PortfolioConfigParser::createPortfolioMO(argv[2], argc, argv);
     break;
   }
+  case _ALGORITHM_PARPMINIMAL_:
+    S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
+                          pb, pbobjf);
+    break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");
     printf("s UNKNOWN\n");

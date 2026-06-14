@@ -17,7 +17,7 @@
 #include "../clausesharing/ISharedClausesBag.h"
 #include "../encodings/RootLits.h"
 #include "../solutionsharing/ISharedSolutionsSet.h"
-#include "../solutionsharing/SharedSolutionsVector.h"
+#include "../solutionsharing/SharedSolutionsArchive.h"
 #include "omp.h"
 #include "utils/System.h"
 #include <atomic>

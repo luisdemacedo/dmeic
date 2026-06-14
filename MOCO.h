@@ -200,7 +200,7 @@ public:
   virtual void printMyStats();
   void saveEfficientSol(const vec<lbool> &currentModel, const uint64_t *point,
                         bool filter = false);
-  void printApproxRatio();
+  virtual void printApproxRatio();
   bool updateLowerBoundSet(const uint64_t *point, bool filter,
                            uint64_t ireencode = 1);
   void clearLowerBoundSet(uint64_t excepti = 0);

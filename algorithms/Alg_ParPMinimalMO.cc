@@ -8,6 +8,7 @@ using NSPACE::toLit;
 void ParPMinimalMO::search_MO() {
   // Init Structures
   init();
+  initWorkers(omp_get_max_threads());
 
   //     printf("\t\tc strategic_search\n");
   //     printf("c eps: %f\n", epsilon);
@@ -15,7 +16,7 @@ void ParPMinimalMO::search_MO() {
   // Build solver
   double epsthreshold = 1 + 1e-4;
 
-  // buildSolversMO(omp_get_max_threads()); // TODO: maybe make this a parameter
+  buildSolversMO(); // TODO: maybe make this a parameter
 
   bool resform[workers.size()];
   bool terminate = false;
@@ -29,8 +30,15 @@ void ParPMinimalMO::search_MO() {
     // encode obj functions
 
 #pragma omp parallel num_threads(workers.size())
-    resform[omp_get_thread_num()] =
-        updateMOFormulationIfSAT(omp_get_thread_num());
+    {
+      if ((size_t)omp_get_num_threads() != workers.size()) {
+        fprintf(stderr, "c ERROR: got %d threads, expected %zu\n",
+                omp_get_num_threads(), workers.size());
+        exit(_ERROR_);
+      }
+      resform[omp_get_thread_num()] =
+          updateMOFormulationIfSAT(omp_get_thread_num());
+    }
 
     if (std::all_of(resform, resform + workers.size(), std::identity{})) {
       printf("c search\n");
@@ -77,7 +85,8 @@ void ParPMinimalMO::search_MO() {
 }
 
 bool ParPMinimalMO::searchParPMinimalMO() {
-  auto &w = workers[omp_get_thread_num()];
+  size_t wid = omp_get_thread_num();
+  auto &w = workers[wid];
   double runtime = cpuTime();
   int nObj = maxsat_formula->nObjFunctions();
 
@@ -89,7 +98,7 @@ bool ParPMinimalMO::searchParPMinimalMO() {
   do { // Randomizing the starting point
     vec<Lit> core;
     for (size_t i = 0; i < w.solver->conflict.size(); i++)
-      core.push(~w.solver->conflict[i]);
+      core.push(w.solver->conflict[i]);
 
     if (core.size())
       w.solver->addClause(core);
@@ -100,62 +109,57 @@ bool ParPMinimalMO::searchParPMinimalMO() {
         if (dist(rng) < 0.1)
           w.assumptions.push(getFormula()->getObjFunction(i)->_lits[j]);
     }
-  } while ((sat = solve(omp_get_thread_num())) != l_True &&
+  } while ((sat = solve(wid)) != l_True &&
            (sat == l_Undef || w.solver->conflict.size() > 0));
 
   for (; sat == l_True;) {
     for (; sat == l_True;) {
       Model m = make_model(w.solver->model);
       YPoint yp = evalModel(m);
-      // solution().pushSafe(m); Race condition, but we will fix it later
-      // ul = solution().yPoint();
-      // share solutions and clauses
-      //  blockDominatedRegion(ul);
+      w.solutions.push(m);
+      ul = yp;
+      shareClauses(wid);
+      shareSolutions(wid, true);
+      blockDominatedRegion(wid, ul);
       std::ostringstream oss;
       oss << ul;
-      std::osyncstream(std::cout) << "c o " << oss.str() << "\n";
+      std::osyncstream(std::cout)
+          << getSolverId() << "c o " << oss.str() << "\n";
       runtime = cpuTime();
-      printf("c new feasible solution (time: %.3f)\n", runtime - initialTime);
+      printf("%sc new feasible solution (time: %.3f)\n", getSolverId().c_str(),
+             runtime - initialTime);
       w.assumptions.clear();
-      //     PBtoCNF::assumeDominatingRegion(ul);
+      assumeDominatingRegion(wid, ul);
 
-      //     shareClauses();
-      //     shareSolutions(true);
-      sat = solve(omp_get_thread_num());
+      shareClauses(wid);
+      shareSolutions(wid, true);
+      sat = solve(wid);
       while (sat == l_Undef) {
-        // shareClauses();
-        // shareSolutions(true);
-        sat = solve(omp_get_thread_num());
+        shareClauses(wid);
+        shareSolutions(wid, true);
+        sat = solve(wid);
       }
     }
     w.assumptions.clear();
     runtime = cpuTime();
-    printf("c new optimal solution (time: %.3f)\n", runtime - initialTime);
-    //   blockDominatedRegion(ul);
-    //   shareClauses();
-    //   shareSolutions(true);
-    sat = solve(omp_get_thread_num());
+    printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
+           runtime - initialTime);
+    blockDominatedRegion(wid, ul);
+    shareClauses(wid);
+    shareSolutions(wid, true);
+    sat = solve(wid);
     while (sat == l_Undef) {
-      // shareClauses();
-      // shareSolutions(true);
-      sat = solve(omp_get_thread_num());
+      shareClauses(wid);
+      shareSolutions(wid, true);
+      sat = solve(wid);
     }
   }
 
-  // if (solution().size() == 0) {
-  //   answerType = _UNSATISFIABLE_;
-  //   return false;
-  // } else {
-  //   answerType = _OPTIMUM_;
-  // }
+  if (solution().size() == 0 && sharedSolutions->empty()) {
+    answerType = _UNSATISFIABLE_;
+    return false;
+  } else {
+    answerType = _OPTIMUM_;
+  }
   return true;
 }
-
-// void ParPMinimalMO::shareSolution(const openwbo::Solution::OneSolution osol)
-// {
-//   auto &w = workers[omp_get_thread_num()];
-//   std::vector<openwbo::Solution::OneSolution> receivedSolutions =
-//       sharedSolutions->syncSolutions({osol}, omp_get_thread_num(), true);
-//   for (const auto &sol : receivedSolutions)
-//     w.blockDominatedRegion(sol.yPoint);
-// }

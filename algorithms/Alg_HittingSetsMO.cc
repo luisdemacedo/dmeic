@@ -59,13 +59,18 @@ bool HittingSetsMO::absorb(Solution::OneSolution &osol, int bvar) {
     auto m = Model{osol.model()};
     // removes elements of solution that are dominated by m.
     if (solution().pushSafe(m, bvar, true, true)) {
+      auto runtime = cpuTime();
+      if (timestats[_time1stSol_] < 0) {
+        timestats[_time1stSol_] = cpuTime() - initialTime;
+        runstats[_nsatcalls1stSol_] = nbSatisfiable;
+      }
       auto yp = solution().yPoint();
       std::ostringstream oss;
       oss << yp;
       std::osyncstream(std::cout)
           << getSolverId() << "c o " << oss.str() << "\n";
       // cout << getSolverId() << "c o " << yp << endl;
-      auto runtime = cpuTime();
+      runtime = cpuTime();
       printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
              runtime - initialTime);
     }
@@ -86,11 +91,13 @@ bool HittingSetsMO::recycleLowerBoundSet() {
     Solution::notes_t bvar = el.second.second;
     // checks satisfiability of complete model
     modelClause(modelEmbed(osol.model(), nVars), assmpts);
+    nbSatCalls++;
     lbool sat = solver->solveLimited(assmpts);
 
-    if (sat == l_True)
+    if (sat == l_True) {
+      nbSatisfiable++;
       absorb(osol, bvar);
-    else if (sat == l_False) {
+    } else if (sat == l_False) {
       andf = false;
       std::ostringstream oss;
       oss << osol;

@@ -1877,7 +1877,7 @@ void Solver::addLearntClauses(std::vector<vec<Lit>> &clauses) {
 
 std::vector<vec<Lit>> Solver::getLearntClauses(size_t var_id_cutoff) {
   assert(decisionLevel() == 0);
-  printf("Total learnts size: %d\n", learnts.size());
+  printf("[getLearntsClauses] Total learnts size: %d\n", learnts.size());
   std::vector<vec<Lit>> res = std::vector<vec<Lit>>();
   for (int i = lastExportedIdx; i < learnts.size(); i++) {
     Clause &c = ca[learnts[i]];

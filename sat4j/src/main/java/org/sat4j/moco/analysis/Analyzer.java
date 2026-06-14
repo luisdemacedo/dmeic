@@ -171,6 +171,7 @@ public class Analyzer {
 		    newSol.setObjectives(objectives);
 		    newRs[ir].addSolution(newSol);
 		}
+		ir++;
 	    }
 	    // replace the dataset with the projected values
 	    this.dataset.replaceValues(key, Arrays.asList(newRs));
