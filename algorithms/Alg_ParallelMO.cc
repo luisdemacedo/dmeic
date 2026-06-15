@@ -193,8 +193,10 @@ void ParallelMO::buildSolversMO() {
        "%d nHard: %d nSoft: %d nPB: %d nObj: %d\n",
        getFormula()->nVars(), getFormula()->nHard(), getFormula()->nSoft(),
        getFormula()->nPB(), getFormula()->nObjFunctions());
-  for (auto &w : workers) {
-    printf("c Building solver\n");
+#pragma omp parallel for
+  for (size_t idx = 0; idx < workers.size(); idx++) {
+    auto &w = workers[idx];
+    std::osyncstream(std::cout) << getSolverId() << " c Building solver\n";
     vec<bool> seen;
     seen.growTo(getFormula()->nVars(), false);
 
@@ -265,9 +267,12 @@ void ParallelMO::buildSolversMO() {
 
     for (int di = 0; di < nObj; di++)
       w.fubs[di] = 0;
-    getMaxSATFormula()->setFixedVars({});
-    getMaxSATFormula()->sync_first(w.solver);
-    w.encoder.kpa_fixed_vars(getMaxSATFormula()->fixed_vars());
+    std::set<Lit> fixedVars;
+    // thread-local sync_first
+    for (int i = 0; i < getFormula()->nInitialVars(); i++)
+      if (w.solver->value(i) != l_Undef)
+        fixedVars.insert(mkLit(i, true));
+    w.encoder.kpa_fixed_vars(fixedVars);
     w._nb_encoded_vars_initial = w.solver->nVars();
   }
 }
@@ -309,10 +314,6 @@ void ParallelMO::init() { // Copied from PBtoCNF
   }
   printf("c Max. Weight: %ld\n", _maxWeight);
   // build the objRootLits vector
-  for (auto &w : workers)
-    for (int i = w.objRootLits.size(); i < getFormula()->nObjFunctions(); i++)
-      w.objRootLits.push_back(
-          std::make_shared<rootLits::RootLits>(rootLits::RootLits{}));
 }
 
 lbool ParallelMO::solve(size_t wid) {
@@ -354,17 +355,29 @@ lbool ParallelMO::solve(size_t wid) {
   return res;
 }
 
-bool ParallelMO::firstSolution() {
-  // if (first.model().size())
-  //   return true;
-  //
-  // double before1stsol = cpuTime();
-  // printf("c first call to solvers[0]\n");
-  // int old = conflict_limit;
-  // conflict_limit = -1;
-  // lbool res = solve(omp_get_thread_num());
-  //
-  //
+bool ParallelMO::firstSolution(size_t wid) {
+  Worker &w = workers[wid];
+  if (w.first.model().size())
+    return true;
+
+  double before1stsol = cpuTime();
+  std::osyncstream(std::cout) << getSolverId() << " c first call to solver\n";
+
+#pragma omp atomic
+  nbSatCalls++;
+
+  w.solver->budgetOff();
+  lbool res = w.solver->solveLimited(w.assumptions);
+  double total_time = cpuTime() - before1stsol;
+  std::osyncstream(std::cout)
+      << getSolverId() << " c first call to solver time:" << total_time << "\n";
+  if (res != l_True)
+    return false;
+
+#pragma omp atomic
+  nbSatisfiable++;
+
+  w.first = Solution::OneSolution{&w.solutions, make_model(w.solver->model)};
   return true;
 }
 
@@ -372,7 +385,7 @@ bool ParallelMO::updateMOFormulationIfSAT(size_t wid) {
   printf("c [updateMOFormulationIfSAT]\n");
   //     solver->my_print();
 
-  if (!firstSolution())
+  if (!firstSolution(wid))
     return false;
   updateMOFormulation(wid);
   return true;
@@ -401,7 +414,7 @@ void ParallelMO::updateMOEncoding(size_t wid) {
   w.nreencodes++;
   if (enc_is_kp_based(wid) || w.encoder.getPBEncoding() == _PB_GTE_ ||
       w.encoder.getPBEncoding() == _PB_IGTE_) {
-    printf("c updateMOEncoding\n");
+    std::osyncstream(std::cout) << getSolverId() << " c updateMOEncoding\n";
     //         solver->my_print();
     //         assumptions.clear();
     for (int i = 0; i < getFormula()->nObjFunctions(); i++) {
@@ -414,14 +427,19 @@ void ParallelMO::updateMOEncoding(size_t wid) {
 
         if (w.objRootLits[i] && w.objRootLits[i]->size() > 0) {
           //                     objRootLits[i].clear();
-          printf("c clear encoding of obj. funct. %d\n", i);
+
+          std::osyncstream(std::cout)
+              << getSolverId() << " c clear encoding of obj. funct. " << i
+              << "\n";
           if (enc_is_kp_based(wid)) {
             //                         kps[i].clearedEncoding(solver);
             // TODO
           }
         }
 
-        printf("\nc encode (function %d upper bound: %lu)\n", i, w.fubs[i]);
+        std::osyncstream(std::cout)
+            << getSolverId() << " c encode (function " << i
+            << " upper bound: " << w.fubs[i] << ")\n";
         getFormula()->getObjFunction(i)->my_print(
             getFormula()->getIndexToName());
 
@@ -541,13 +559,15 @@ void ParallelMO::shareSolutions(size_t wid, bool alsoPull) {
   std::vector<openwbo::Solution::OneSolution> receivedFront =
       sharedSolutions->syncSolutions(localFront, wid, alsoPull);
 
-  for (auto &sol : receivedFront)
+  for (auto &sol : receivedFront) {
     blockDominatedRegion(wid, sol.yPoint());
+    solution().pushSafe(sol.model());
+  }
 }
 
 void ParallelMO::shareClauses(size_t wid) {
-  // if (!getShareClauses()) TODO
-  // return;
+  if (!getShareClauses())
+    return;
 
   Worker &w = workers[wid];
   std::vector<vec<Lit>> clauses = w.solver->getLearntClauses(-1); // 0-indexed

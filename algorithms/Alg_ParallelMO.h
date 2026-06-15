@@ -40,21 +40,20 @@ public:
 
   ParallelMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
              int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
-             int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
-             int apmode = encoding::_ap_outvars_, float eps = 1,
-             int searchStrat = 3, float redFact = -1)
+             int pb = _PB_SWC_, int pbobjf = _PB_GTE_, size_t nWorkers = 2,
+             bool clausesharing = false, int apmode = encoding::_ap_outvars_,
+             float eps = 1, int searchStrat = 3, float redFact = -1)
       : cardinality_encoding(enc), pb_encoding(pb),
-        pb_objective_encoding(pbobjf), approxMode(apmode), epsilon(eps),
-        redFactor(redFact), answerType(_UNKNOWN_) {}
+        pb_objective_encoding(pbobjf), _shareClauses(clausesharing),
+        approxMode(apmode), epsilon(eps), redFactor(redFact),
+        answerType(_UNKNOWN_) {
+    workers = std::vector<Worker>(nWorkers);
+  }
 
   ~ParallelMO() {
     for (auto &worker : workers)
       delete worker.solver;
   }
-
-  // void search_MO() override;
-
-  // StatusCode search() override;
 
   StatusCode search() override;
   virtual void search_MO() = 0;
@@ -62,8 +61,8 @@ public:
   bool updateMOFormulationIfSAT(size_t wid);
   bool updateMOFormulation(size_t wid);
   void init();
-  bool firstSolution(); // Sets the worker's first solution and
-                        // returns true if one is found.
+  bool firstSolution(size_t wid); // Sets the worker's first solution and
+                                  // returns true if one is found.
 
   std::string getSolverId() override {
     return "[s" + std::to_string(omp_get_thread_num()) + "] ";
@@ -98,10 +97,8 @@ protected:
 
   std::vector<Worker> workers;
 
-  void initWorkers(size_t n) {
-    workers = std::vector<Worker>(n);
+  void initWorkers() {
     for (auto &worker : workers) {
-      worker.solver = newSATSolver();
       worker.encoder.setCardEncoding(cardinality_encoding);
       worker.encoder.setPBEncoding(pb_objective_encoding);
       worker.nConflicts = conflict_limit;
@@ -111,8 +108,10 @@ protected:
             std::make_shared<rootLits::RootLits>(rootLits::RootLits{}));
       worker.solutions = Solution(this);
     }
-    sharedSolutions = make_unique<solutionsharing::SharedSolutionsArchive>(n);
-    sharedLearntClauses = make_unique<clausesharing::DequeSharedClausesBag>(n);
+    sharedSolutions =
+        make_unique<solutionsharing::SharedSolutionsArchive>(workers.size());
+    sharedLearntClauses =
+        make_unique<clausesharing::DequeSharedClausesBag>(workers.size());
   }
 
   bool enc_is_kp_based(size_t wid) {
@@ -132,6 +131,7 @@ protected:
 
   void shareSolutions(size_t wid, bool alsoPull);
   void shareClauses(size_t wid);
+  bool getShareClauses() { return _shareClauses; }
 
   void evalToIndex(size_t wid, const YPoint &yp, uint64_t *objix);
   void evalToIndex(size_t wid, uint64_t *objv, uint64_t *objix);
@@ -165,6 +165,7 @@ protected:
   StatusCode answerType = _UNKNOWN_;
 
   std::unique_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
+  bool _shareClauses;
   std::unique_ptr<clausesharing::ISharedClausesBag> sharedLearntClauses;
 };
 } // namespace openwbo

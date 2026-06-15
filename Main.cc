@@ -366,7 +366,10 @@ DoubleOption geometric_ratio("geometric progression ratio ", "geo_p",
 IntOption arithmetic_shift("arithmetic progression", "ari_p",
                            ". number of values to jump over\n", 1);
 
-// Portfolio options
+// Parallel MOCO options
+IntOption n_moco_workers("Parallel MOCO", "nworkers",
+                         "Number of threads to use for parallel MOCO.\n", 4,
+                         IntRange(1, 64));
 BoolOption
     stop_on_first_result("Portfolio", "stop-on-first-result",
                          "Whether to stop the portfolio search after the first "
@@ -378,13 +381,12 @@ BoolOption share_solutions("Portfolio", "share-solutions",
                            "portfolio\n",
                            false);
 
-BoolOption share_clauses("Portfolio", "share-clauses",
-                         "Whether to share learnt clauses between solvers in "
-                         "the portfolio\n",
+BoolOption share_clauses("Parallel MOCO", "share-clauses",
+                         "Whether to share learnt clauses between solvers.\n",
                          -1);
 
 IntOption sharing_heuristic(
-    "Portfolio", "sharing_heuristic",
+    "Parallel MOCO", "sharing_heuristic",
     "Heuristic for clause sharing (0=none, 1=size heuristic).\n", 0,
     IntRange(0, 1));
 
@@ -665,7 +667,7 @@ MaxSAT *buildSolver(int argc, char **argv) {
   }
   case _ALGORITHM_PARPMINIMAL_:
     S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
-                          pb, pbobjf);
+                          pb, pbobjf, n_moco_workers, share_clauses);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");

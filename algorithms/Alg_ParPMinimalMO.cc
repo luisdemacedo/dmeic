@@ -8,7 +8,7 @@ using NSPACE::toLit;
 void ParPMinimalMO::search_MO() {
   // Init Structures
   init();
-  initWorkers(omp_get_max_threads());
+  initWorkers();
 
   //     printf("\t\tc strategic_search\n");
   //     printf("c eps: %f\n", epsilon);
@@ -16,7 +16,7 @@ void ParPMinimalMO::search_MO() {
   // Build solver
   double epsthreshold = 1 + 1e-4;
 
-  buildSolversMO(); // TODO: maybe make this a parameter
+  buildSolversMO();
 
   bool resform[workers.size()];
   bool terminate = false;

@@ -1223,7 +1223,7 @@ void PBtoCNF::printSmallestModel() {
 // Prints the corresponding answer.
 void PBtoCNF::printAnswer(int type) {
   // Inside portfolio
-  if (!getShareClauses() && !getShareSolutions()) {
+  if (isInsidePortfolio() && !getShareClauses() && !getShareSolutions()) {
     std::unique_lock<std::mutex> lock(*printResultsLock);
   }
   MOCO::printAnswer(type);
@@ -1717,6 +1717,7 @@ void PBtoCNF::shareSolutions(bool alsoPull) {
                                      alsoPull);
   for (auto &sol : receivedFront) {
     blockDominatedRegion(sol.yPoint());
+    solution().pushSafe(sol.model());
   }
 }
 
