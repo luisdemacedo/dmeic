@@ -383,7 +383,7 @@ BoolOption share_solutions("Portfolio", "share-solutions",
 
 BoolOption share_clauses("Parallel MOCO", "share-clauses",
                          "Whether to share learnt clauses between solvers.\n",
-                         -1);
+                         false);
 
 IntOption sharing_heuristic(
     "Parallel MOCO", "sharing_heuristic",
