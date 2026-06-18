@@ -11,14 +11,57 @@ StatusCode ParallelMO::search() {
   return answerType;
 }
 
+void ParallelMO::updateStats() {
+  int nev = 0, nec = 0, nerv = 0;
+
+  for (int i = 0; i < getFormula()->nObjFunctions(); i++) {
+    // Printing from the first solver in the portfolio, since all solvers should
+    // have the same encoding sizes
+    if (enc_is_kp_based(0))
+      workers[0].kps[i].getEncodeSizes(&nev, &nec, &nerv);
+    else if (workers[0].encoder.getPBEncoding() == _PB_GTE_)
+      workers[0].gtes[i].getEncodeSizes(&nev, &nec, &nerv);
+    workers[0].nbEncVars += nev;
+    workers[0].nbEncClauses += nec;
+    workers[0].nbEncRootVars += nerv;
+    fprintf(stdout, "c objstats %3d %5d %8d %9d\n", i + 1, nev, nec, nerv);
+  }
+}
+
 // TODO: add stats
 void ParallelMO::printStats() {
-  // double totalTime = cpuTime();
+  double totalTime = cpuTime();
 
   FILE *f = stdout;
 
+  std::cout << "c ------- " << std::endl;
+  fprintf(f, "c lobjstats obj nvars nclauses nrootvars\n");
+  updateStats();
+
+  std::cout << "c ------- " << std::endl;
+  fprintf(f,
+          "clrunstats     %18s %12s %12s %12s %12s %12s %18s %18s %18s %20s "
+          "%18s %8s %8s\n",
+          "nsatcalls_1stSol", "nsatcalls", "ncalls", "n_eff_sols", "n_nondom",
+          "n_prob_vars", "n_prob_clauses", "n_enc_vars(sum)",
+          "n_enc_clauses(sum)", "n_enc_rootvars(sum)", "n_reencodes", "rapprox",
+          "nobj");
+  for (size_t idx = 0; idx < workers.size(); idx++)
+    fprintf(f,
+            "crunstats %4s %18d %12d %12d %12d %12d %12d %18d %18d %18d %20d "
+            "%18d %8.4f %8d\n",
+            std::format("[s{}]", idx).c_str(), workers[idx].nbSatCalls1stSol,
+            workers[idx].nbSatisfiable, workers[idx].nbSatCalls,
+            workers[idx].solutions.size(), workers[idx].solutions.size(),
+            getFormula()->nVars(), getFormula()->nHard(),
+            workers[idx].nbEncVars, workers[idx].nbEncClauses,
+            workers[idx].nbEncRootVars, workers[idx].nbReencodes, repsilon,
+            getFormula()->nObjFunctions());
+
   // if (getShareClauses()) {
-  fprintf(f, "cclausesharingstats %20s %20s %20s %20s %20s %22s %24s %24s\n",
+  std::cout << "c ------- " << std::endl;
+  fprintf(f,
+          "cclausesharingstats       %20s %20s %20s %20s %20s %22s %24s %24s\n",
           "nsynccalls", "nnonempty_pushes", "nnonempty_grabs",
           "nclauses_pushed", "nclauses_grabbed", "nclauses_filtered_out",
           "time_spent_syncing (ms)", "time_waiting_lock (ms)");
@@ -29,9 +72,9 @@ void ParallelMO::printStats() {
         sharedLearntClauses->getLockWaitTime(idx));
 
     fprintf(f,
-            "%-20s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
+            "%-20s %4s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
             "%24lld\n",
-            ("solver" + std::to_string(idx)).c_str(),
+            "clausesharingstats", std::format("[s{}]", idx).c_str(),
             sharedLearntClauses->getSyncs(idx),
             sharedLearntClauses->getNonemptyPushes(idx),
             sharedLearntClauses->getNonemptyGrabs(idx),
@@ -44,13 +87,14 @@ void ParallelMO::printStats() {
 
   fprintf(f, "cclausesharingstats %16s %16s %20s\n", "largest_push",
           "largest_grab", "most_clauses_in_bag");
-  fprintf(f, "cclausesharingstats %16zu %16zu %20zu\n",
+  fprintf(f, "clausesharingstats %16zu %16zu %20zu\n",
           sharedLearntClauses->getLargestPush(),
           sharedLearntClauses->getLargestGrab(),
           sharedLearntClauses->getMostClausesInBag());
   // }
 
-  fprintf(f, "csolutionsharingstats %20s %20s %24s %24s %20s %20s\n",
+  std::cout << "c ------- " << std::endl;
+  fprintf(f, "ccsolutionsharingstats      %20s %20s %24s %24s %20s %20s\n",
           "nsols_pushed", "nsols_grabbed", "time_spent_syncing (ms)",
           "time_waiting_lock (ms)", "time_pulling (ms)", "time_pushing (ms)");
 
@@ -63,8 +107,8 @@ void ParallelMO::printStats() {
         sharedSolutions->getPullTime(idx));
     auto pushTime = std::chrono::duration_cast<std::chrono::milliseconds>(
         sharedSolutions->getPushTime(idx));
-    fprintf(f, "%-20s %20zu %20zu %24lld %24lld %20lld %20lld\n",
-            ("solver" + std::to_string(idx)).c_str(),
+    fprintf(f, "%-21s %4s %20zu %20zu %24lld %24lld %20lld %20lld\n",
+            "csolutionsharingstats", std::format("[s{}]", idx).c_str(),
             sharedSolutions->getSolutionsPushed(idx),
             sharedSolutions->getSolutionsPulled(idx),
             static_cast<long long>(syncTime.count()),
@@ -72,6 +116,14 @@ void ParallelMO::printStats() {
             static_cast<long long>(pullTime.count()),
             static_cast<long long>(pushTime.count()));
   }
+
+  timestats[_totaltime_] = totalTime - initialTime;
+  std::cout << "c ------- " << std::endl;
+  fprintf(f, "cltimestats      %12s %12s\n", "time_1stSol", "totaltime");
+  for (size_t idx = 0; idx < workers.size(); idx++)
+    fprintf(f, "ctimestats %4s %12.2f %12.2f\n",
+            std::format("[s{}]", idx).c_str(), workers[idx].time1stSol,
+            totalTime - workers[idx].initialTime);
 }
 
 void ParallelMO::printAnswer(int type) {
@@ -91,7 +143,7 @@ void ParallelMO::printAnswer(int type) {
   case _OPTIMUM_:
     printf("s OPTIMUM\n");
     printSolutions();
-    printApproxRatio();
+    // printApproxRatio();
     printStats();
     break;
   case _UNSATISFIABLE_:
@@ -561,7 +613,7 @@ void ParallelMO::shareSolutions(size_t wid, bool alsoPull) {
 
   for (auto &sol : receivedFront) {
     blockDominatedRegion(wid, sol.yPoint());
-    solution().pushSafe(sol.model());
+    w.solutions.pushSafe(sol.model());
   }
 }
 

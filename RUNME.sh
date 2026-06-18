@@ -10,21 +10,23 @@ function print_help() {
 then
     cat <<EOF
 usage:
-./run_me.sh <algorithm> <instance> [budget of conflicts] [waiting list type]
+./run_me.sh <algorithm> <instance> [open-wbo options...]
+./run_me.sh portfolio <instance> <portfolio config> [open-wbo options...]
 <algorithm> is one of the following,
 	pmcs, pmin, hs, us, us-pmin, usl, usl-pmin;
 
 <instance> is the path for a valid instance. If the path terminates in
 .xz or .tar.gz, the file will be decompressed; 
 
-The third and fourth arguments are optional and only meaningful for
-some algortihms.  The third controls the budget of conflicts, the
-fourth the type of the waiting list.
+For algorithms that use them, default values are -conf_budget=300 and
+-wl_type=0. Override them by passing Open-WBO options after the instance.
 
 For instance, run me like this:
     ./RUNME.sh sd examples/DAL1.pbmo
 or:
-    ./RUNME.sh lbr examples/DAL1.pbmo 100 0
+    ./RUNME.sh lbr examples/DAL1.pbmo -conf_budget=100 -wl_type=0
+or:
+    ./RUNME.sh portfolio examples/DAL1.pbmo portfolio.config -verbosity=1
 EOF
     exit 1;
 fi
@@ -35,17 +37,10 @@ function main(){
 
     algorithm=$1
     instance=$2
-    unset '$2'
-
-    if [ ! -z $3 ] 
-    then
-	conf_budget=$3
-    fi
-
-    if [ ! -z $4 ] 
-    then
-       wl_type=$4
-    fi
+    shift 2
+    extra_args=("$@")
+    conf_budget_default="-conf_budget=$conf_budget"
+    wl_type_default="-wl_type=$wl_type"
 
     case $instance in
 	*.xz)
@@ -67,51 +62,57 @@ function main(){
 	    echo "c no decompression required"
 	    ;;
     esac
-    case $1 in
+    case "$algorithm" in
 	pmcs)
-	    java -jar $sat4j_solver -alg 0 $instance ;;
+	    java -jar "$sat4j_solver" -alg 0 "$instance" ;;
 	pmin)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -algorithm=8 -pbobjf=4 -eps=1\
-			    -apmode=1 -no-cubounds -no-clbounds $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "${extra_args[@]}" "$instance" ;;
 	hs)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -algorithm=9 -pbobjf=4 -eps=1\
-			    -apmode=1 -no-cubounds -no-clbounds $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "${extra_args[@]}" "$instance" ;;
 	us)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -algorithm=7 -pbobjf=4 -eps=1\
-			    -apmode=1 -no-cubounds -no-clbounds $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "${extra_args[@]}" "$instance" ;;
 	uspmin)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -algorithm=17 -pbobjf=4 -eps=1\
-			    -apmode=1 -no-cubounds -no-clbounds  -conf_budget=$conf_budget $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "$conf_budget_default" "${extra_args[@]}" "$instance" ;;
 	sd)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
-			    -formula=1 -algorithm=18 -pbobjf=4 -eps=1 -conf_budget=$conf_budget -wl_type=$wl_type\
-			    -apmode=1 -no-cubounds -no-clbounds -no-ascend $instance ;;
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
+			    -formula=1 -algorithm=18 -pbobjf=4 -eps=1 "$conf_budget_default" "$wl_type_default"\
+			    -apmode=1 -no-cubounds -no-clbounds -no-ascend "${extra_args[@]}" "$instance" ;;
 	lbr)
-	    $openwbo_solver -cardinality=1 -pb=2  -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2  -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=23 -pbobjf=4 -eps=1  -core_optim=2 \
-			    -apmode=1 -no-cubounds -no-clbounds -conf_budget=$conf_budget -wl_type=$wl_type $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "$conf_budget_default" "$wl_type_default" "${extra_args[@]}" "$instance" ;;
 	e-lbr)
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=23 -pbobjf=4 -eps=1  -core_optim=2 \
-			    -apmode=1 -no-cubounds -no-clbounds -conf_budget=$conf_budget -wl_type=$wl_type $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "$conf_budget_default" "$wl_type_default" "${extra_args[@]}" "$instance" ;;
 	portfolio)
+            if [ ${#extra_args[@]} -eq 0 ]; then
+                echo "portfolio requires a config file argument."
+                exit 1
+            fi
+            config=${extra_args[0]}
+            extra_args=("${extra_args[@]:1}")
 		        # gdb --args \
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=29 -pbobjf=4 -eps=1  -core_optim=2 \
-			    -apmode=1 -no-cubounds -no-clbounds $instance $conf_budget ;;
+			    -apmode=1 -no-cubounds -no-clbounds "$instance" "$config" "${extra_args[@]}";;
 
 	parpmin)
 		         # gdb --args \
-	    $openwbo_solver -cardinality=1 -pb=2 -no-bmo \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=30 -pbobjf=4 -eps=1  -core_optim=2 \
-			    -apmode=1 -no-cubounds -no-clbounds -conf_budget=$conf_budget -wl_type=$wl_type $instance ;;
+			    -apmode=1 -no-cubounds -no-clbounds "$conf_budget_default" "$wl_type_default" "${extra_args[@]}" "$instance" ;;
 
    *)
-	echo "Check name of the algorithm to run: \"$1\" is not valid."
+	echo "Check name of the algorithm to run: \"$algorithm\" is not valid."
 	exit 1;;
 esac
       if [ ! -z $tmp ] && [ -f $tmp ]; then

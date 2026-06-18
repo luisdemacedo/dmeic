@@ -13,6 +13,7 @@
 #include "./Alg_ParallelMO.h"
 #include "omp.h"
 #include "utils/System.h"
+#include <functional>
 #include <map>
 #include <set>
 #include <syncstream>
@@ -35,7 +36,7 @@ public:
 
   ~ParPMinimalMO() {}
 
-  bool searchParPMinimalMO();
+  void searchParPMinimalMO(size_t wid);
   void search_MO() override;
   void shareSolution(openwbo::Solution::OneSolution osol);
 

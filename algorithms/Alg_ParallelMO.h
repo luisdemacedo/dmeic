@@ -93,6 +93,16 @@ protected:
     size_t _nb_encoded_vars_initial = 0;
     std::unique_ptr<clausesharing::IClauseSharingHeuristic> sharingHeuristic =
         std::make_unique<clausesharing::SizeHeuristic>();
+
+    int nbSatisfiable = 0;
+    int nbSatCalls = 0;
+    int nbEncVars = 0;
+    int nbEncClauses = 0;
+    int nbEncRootVars = 0;
+    int nbSatCalls1stSol = 0;
+    int nbReencodes = 0;
+    double time1stSol = 0;
+    double initialTime = 0;
   };
 
   std::vector<Worker> workers;
@@ -137,6 +147,7 @@ protected:
   void evalToIndex(size_t wid, uint64_t *objv, uint64_t *objix);
 
   void printApproxRatio() override;
+  void updateStats() override;
 
   // Options
   bool _useAllVars = false;

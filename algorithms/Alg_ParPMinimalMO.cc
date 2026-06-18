@@ -18,14 +18,13 @@ void ParPMinimalMO::search_MO() {
 
   buildSolversMO();
 
-  bool resform[workers.size()];
+  auto resform = std::make_unique<bool[]>(workers.size());
   bool terminate = false;
   nbMCS = 0;
 
   answerType = _UNKNOWN_;
 
   bool permanentBlock = false;
-
   while (!terminate) {
     // encode obj functions
 
@@ -40,10 +39,15 @@ void ParPMinimalMO::search_MO() {
           updateMOFormulationIfSAT(omp_get_thread_num());
     }
 
-    if (std::all_of(resform, resform + workers.size(), std::identity{})) {
+    if (std::all_of(resform.get(), resform.get() + workers.size(),
+                    std::identity{})) {
       printf("c search\n");
 #pragma omp parallel num_threads(workers.size())
-      searchParPMinimalMO();
+      {
+        size_t wid = omp_get_thread_num();
+        workers[wid].time1stSol = cpuTime() - initialTime;
+        searchParPMinimalMO(wid);
+      }
     } else {
       printf("c No more solutions!\n");
     }
@@ -51,7 +55,8 @@ void ParPMinimalMO::search_MO() {
     printf("c epsilon: %f\n", epsilon);
     printf("c reductionFactor: %f\n", redFactor);
     if ((permanentBlock &&
-         std::none_of(resform, resform + workers.size(), std::identity{})) ||
+         std::none_of(resform.get(), resform.get() + workers.size(),
+                      std::identity{})) ||
         epsilon <= 1 || redFactor < 0) {
       terminate = true;
       printf("c time to terminate\n");
@@ -72,7 +77,6 @@ void ParPMinimalMO::search_MO() {
       for (size_t i = 0; i < nondom.size(); i++)
         updateLowerBoundSet(nondom[i], false);
     }
-    answerType = _OPTIMUM_;
   } else {
     int nreencodes = 0;
     for (size_t i = 0; i < workers.size(); i++)
@@ -81,11 +85,14 @@ void ParPMinimalMO::search_MO() {
       clearLowerBoundSet();
   }
 
+  if (sharedSolutions->empty())
+    answerType = _UNSATISFIABLE_;
+  else
+    answerType = _OPTIMUM_;
   printAnswer(answerType);
 }
 
-bool ParPMinimalMO::searchParPMinimalMO() {
-  size_t wid = omp_get_thread_num();
+void ParPMinimalMO::searchParPMinimalMO(size_t wid) {
   auto &w = workers[wid];
   double runtime = cpuTime();
   int nObj = maxsat_formula->nObjFunctions();
@@ -154,12 +161,5 @@ bool ParPMinimalMO::searchParPMinimalMO() {
       sat = solve(wid);
     }
   }
-
-  if (solution().size() == 0 && sharedSolutions->empty()) {
-    answerType = _UNSATISFIABLE_;
-    return false;
-  } else {
-    answerType = _OPTIMUM_;
-  }
-  return true;
+  return;
 }

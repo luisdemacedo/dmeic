@@ -211,12 +211,10 @@ void PortfolioMO::printStats() {
   // if (getShareClauses()) {
   std::cout << "c ------- " << std::endl;
   fprintf(f,
-          "clclausesharingstats       %20s %20s %20s %20s %20s %22s %24s %24s "
-          "%16s %16s %20s\n",
+          "cclausesharingstats       %20s %20s %20s %20s %20s %22s %24s %24s\n",
           "nsynccalls", "nnonempty_pushes", "nnonempty_grabs",
           "nclauses_pushed", "nclauses_grabbed", "nclauses_filtered_out",
-          "time_spent_syncing (ms)", "time_waiting_lock (ms)", "largest_push",
-          "largest_pull", "most_clauses_in_bag");
+          "time_spent_syncing (ms)", "time_waiting_lock (ms)");
   for (size_t idx = 0; idx < sharedLearntClauses->getNumWorkers(); idx++) {
     auto syncTime = std::chrono::duration_cast<std::chrono::milliseconds>(
         sharedLearntClauses->getSyncTime(idx));
@@ -224,9 +222,9 @@ void PortfolioMO::printStats() {
         sharedLearntClauses->getLockWaitTime(idx));
 
     fprintf(f,
-            "%-21s %4s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
-            "%24lld %16zu %16zu %20zu\n",
-            "cclausesharingstats", std::format("[s{}]", idx).c_str(),
+            "%-20s %4s %20zu %20zu %20zu %20zu %20zu %22zu %24lld "
+            "%24lld\n",
+            "clausesharingstats", std::format("[s{}]", idx).c_str(),
             sharedLearntClauses->getSyncs(idx),
             sharedLearntClauses->getNonemptyPushes(idx),
             sharedLearntClauses->getNonemptyGrabs(idx),
@@ -234,15 +232,20 @@ void PortfolioMO::printStats() {
             sharedLearntClauses->getClausesGrabbed(idx),
             sharedLearntClauses->getClausesFilteredOut(idx),
             static_cast<long long>(syncTime.count()),
-            static_cast<long long>(lockWaitTime.count()),
-            sharedLearntClauses->getLargestPush(),
-            sharedLearntClauses->getLargestGrab(),
-            sharedLearntClauses->getMostClausesInBag());
+            static_cast<long long>(lockWaitTime.count()));
   }
+
+  fprintf(f, "cclausesharingstats %16s %16s %20s\n", "largest_push",
+          "largest_grab", "most_clauses_in_bag");
+  fprintf(f, "clausesharingstats %16zu %16zu %20zu\n",
+          sharedLearntClauses->getLargestPush(),
+          sharedLearntClauses->getLargestGrab(),
+          sharedLearntClauses->getMostClausesInBag());
+
   // }
 
   std::cout << "c ------- " << std::endl;
-  fprintf(f, "clsolutionsharingstats      %20s %20s %24s %24s %20s %20s\n",
+  fprintf(f, "ccsolutionsharingstats      %20s %20s %24s %24s %20s %20s\n",
           "nsols_pushed", "nsols_grabbed", "time_spent_syncing (ms)",
           "time_waiting_lock (ms)", "time_pulling (ms)", "time_pushing (ms)");
 
