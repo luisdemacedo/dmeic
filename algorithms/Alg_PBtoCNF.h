@@ -185,6 +185,10 @@ public:
 
   void setMyOutputFiles(const char *file) override;
 
+  void setClauseSharingVarCutoff(size_t cutoff) {
+    _nb_encoded_vars_initial = cutoff;
+  }
+
   void applyBlockDominatedRegion(
       const YPoint &yp) { // A public wrapper for blockDominatedRegion. Used by
                           // HittingSetsMO.

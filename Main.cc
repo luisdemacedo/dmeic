@@ -367,14 +367,18 @@ IntOption arithmetic_shift("arithmetic progression", "ari_p",
                            ". number of values to jump over\n", 1);
 
 // Parallel MOCO options
+StringOption portfolio_config("Portfolio", "config",
+                              "Configuration file for the portfolio search.\n",
+                              NULL);
+
 IntOption n_moco_workers("Parallel MOCO", "nworkers",
                          "Number of threads to use for parallel MOCO.\n", 4,
                          IntRange(1, 64));
 BoolOption
-    stop_on_first_result("Portfolio", "stop-on-first-result",
-                         "Whether to stop the portfolio search after the first "
-                         "solver finishes.\n",
-                         false);
+    stop_search_flag("Portfolio", "stop-search-flag",
+                     "Whether to stop the portfolio search after the first "
+                     "solver finishes.\n",
+                     false);
 
 BoolOption share_solutions("Portfolio", "share-solutions",
                            "Whether to share solutions between solvers in the "
@@ -384,12 +388,6 @@ BoolOption share_solutions("Portfolio", "share-solutions",
 BoolOption share_clauses("Parallel MOCO", "share-clauses",
                          "Whether to share learnt clauses between solvers.\n",
                          false);
-
-IntOption sharing_heuristic(
-    "Parallel MOCO", "sharing_heuristic",
-    "Heuristic for clause sharing (0=none, 1=size heuristic).\n", 0,
-    IntRange(0, 1));
-
 } // namespace options
 
 void setLimits() {
@@ -403,104 +401,252 @@ void setLimits() {
 
 namespace PortfolioConfigParser {
 
-class NoClauseSharingHeuristic : public clausesharing::IClauseSharingHeuristic {
-public:
-  std::vector<vec<Lit>>
-  filter(const std::vector<vec<Lit>> &sharedClauses) override {
-    std::vector<vec<Lit>> result;
-    for (const vec<Lit> &clause : sharedClauses) {
-      vec<Lit> copy;
-      clause.copyTo(copy);
-      result.push_back(std::move(copy));
-    }
-    return result;
-  }
-};
-
-clausesharing::IClauseSharingHeuristic *
-createClauseSharingHeuristic(const PortfolioSolverConfig &solverConfig,
-                             int defaultHeuristic) {
-  int sharing_heuristic =
-      solverConfig.getIntOr("sharing_heuristic", defaultHeuristic);
-
-  if (sharing_heuristic == 0) {
-    return new NoClauseSharingHeuristic();
-  }
-
-  if (sharing_heuristic == 1) {
-    int size = solverConfig.getIntOr("sharing_heuristic_size", 8);
-    if (size < 0) {
-      fprintf(stderr,
-              "c Error: Invalid sharing_heuristic_size in portfolio config: "
-              "%d\n",
-              size);
-      exit(_ERROR_);
-    }
-    return new clausesharing::SizeHeuristic(size);
-  }
-
-  fprintf(stderr,
-          "c Error: Invalid sharing_heuristic in portfolio config: %d\n",
-          sharing_heuristic);
-  exit(_ERROR_);
-  return nullptr;
-}
-
 PBtoCNF *createPortfolioSolver(const PortfolioSolverConfig &solverConfig) {
-  int verbosity = solverConfig.getIntOr("verbosity", options::verbosity);
-  int weight = solverConfig.getIntOr("weight-strategy", options::weight);
+  std::string algorithm = solverConfig.contains("algorithm")
+                              ? solverConfig.at("algorithm")
+                              : throw std::runtime_error(
+                                    "Missing 'algorithm' in portfolio config.");
+  bool printmodel;
+  if (solverConfig.contains("print-model")) {
+    if (solverConfig.at("print-model") == "true")
+      printmodel = true;
+    else if (solverConfig.at("print-model") == "false")
+      printmodel = false;
+  } else
+    printmodel = options::printmodel;
+
+  std::string printsoft = solverConfig.contains("print-unsat-soft")
+                              ? solverConfig.at("print-unsat-soft")
+                          : options::printsoft != NULL
+                              ? std::string(options::printsoft)
+                              : std::string();
+
+  std::string saveoutput = solverConfig.contains("save-my-output")
+                               ? solverConfig.at("save-my-output")
+                           : options::saveoutput != NULL
+                               ? std::string(options::saveoutput)
+                               : std::string();
+
+  int verbosity = solverConfig.contains("verbosity")
+                      ? std::stoi(solverConfig.at("verbosity"))
+                      : options::verbosity;
+
   int partition_strategy =
-      solverConfig.getIntOr("partition-strategy", options::partition_strategy);
-  int cardinality = solverConfig.getIntOr("cardinality", options::cardinality);
-  int pb = solverConfig.getIntOr("pb", options::pb);
-  int pbobjf = solverConfig.getIntOr("pbobjf", options::pbobjf);
+      solverConfig.contains("partition-strategy")
+          ? std::stoi(solverConfig.at("partition-strategy"))
+          : options::partition_strategy;
+
+  int cardinality = solverConfig.contains("cardinality")
+                        ? std::stoi(solverConfig.at("cardinality"))
+                        : options::cardinality;
+
+  int amo = solverConfig.contains("amo") ? std::stoi(solverConfig.at("amo"))
+                                         : options::amo;
+
+  int pb = solverConfig.contains("pb") ? std::stoi(solverConfig.at("pb"))
+                                       : options::pb;
+
+  int pbobjf = solverConfig.contains("pbobjf")
+                   ? std::stoi(solverConfig.at("pbobjf"))
+                   : options::pbobjf;
+
+  int sstrategy = solverConfig.contains("sstrategy")
+                      ? std::stoi(solverConfig.at("sstrategy"))
+                      : options::sstrategy;
+
+  bool clbounds;
+  if (solverConfig.contains("clbounds")) {
+    if (solverConfig.at("clbounds") == "true")
+      clbounds = true;
+    else if (solverConfig.at("clbounds") == "false")
+      clbounds = false;
+  } else
+    clbounds = options::clbounds;
+
+  bool cubounds;
+  if (solverConfig.contains("cubounds")) {
+    if (solverConfig.at("cubounds") == "true")
+      cubounds = true;
+    else if (solverConfig.at("cubounds") == "false")
+      cubounds = false;
+  } else
+    cubounds = options::cubounds;
+
+  int apmode = solverConfig.contains("apmode")
+                   ? std::stoi(solverConfig.at("apmode"))
+                   : options::apmode;
+
+  double eps = solverConfig.contains("eps") ? std::stod(solverConfig.at("eps"))
+                                            : options::eps;
+
+  double redFactor = solverConfig.contains("redFactor")
+                         ? std::stod(solverConfig.at("redFactor"))
+                         : options::redFactor;
+
+  bool fulligte;
+  if (solverConfig.contains("fulligte")) {
+    if (solverConfig.at("fulligte") == "true")
+      fulligte = true;
+    else if (solverConfig.at("fulligte") == "false")
+      fulligte = false;
+  } else
+    fulligte = options::fulligte;
+
+  int formula = solverConfig.contains("formula")
+                    ? std::stoi(solverConfig.at("formula"))
+                    : options::formula;
+
+  int weight = solverConfig.contains("weight-strategy")
+                   ? std::stoi(solverConfig.at("weight-strategy"))
+                   : options::weight;
+
+  bool symmetry;
+  if (solverConfig.contains("symmetry")) {
+    if (solverConfig.at("symmetry") == "true")
+      symmetry = true;
+    else if (solverConfig.at("symmetry") == "false")
+      symmetry = false;
+  } else
+    symmetry = options::symmetry;
+
+  int symmetry_lim = solverConfig.contains("symmetry-limit")
+                         ? std::stoi(solverConfig.at("symmetry-limit"))
+                         : options::symmetry_lim;
+
+  int partition_parameter = solverConfig.contains("part_par")
+                                ? std::stoi(solverConfig.at("part_par"))
+                                : options::partition_parameter;
+
+  int conf_budget = solverConfig.contains("conf_budget")
+                        ? std::stoi(solverConfig.at("conf_budget"))
+                        : options::conf_budget;
+
+  bool ascend;
+  if (solverConfig.contains("ascend")) {
+    if (solverConfig.at("ascend") == "true")
+      ascend = true;
+    else if (solverConfig.at("ascend") == "false")
+      ascend = false;
+  } else
+    ascend = options::ascend;
+
+  bool core_ascend;
+  if (solverConfig.contains("core_ascend")) {
+    if (solverConfig.at("core_ascend") == "true")
+      core_ascend = true;
+    else if (solverConfig.at("core_ascend") == "false")
+      core_ascend = false;
+  } else
+    core_ascend = options::core_ascend;
+
+  int core_optim = solverConfig.contains("core_optim")
+                       ? std::stoi(solverConfig.at("core_optim"))
+                       : options::core_optim;
+
+  int conf_core = solverConfig.contains("conf_core")
+                      ? std::stoi(solverConfig.at("conf_core"))
+                      : options::conf_core;
+
+  int wl_type = solverConfig.contains("wl_type")
+                    ? std::stoi(solverConfig.at("wl_type"))
+                    : options::wl_type;
+
+  bool lower;
+  if (solverConfig.contains("lower")) {
+    if (solverConfig.at("lower") == "true")
+      lower = true;
+    else if (solverConfig.at("lower") == "false")
+      lower = false;
+  } else
+    lower = options::lower;
+
+  bool block_below;
+  if (solverConfig.contains("block_below")) {
+    if (solverConfig.at("block_below") == "true")
+      block_below = true;
+    else if (solverConfig.at("block_below") == "false")
+      block_below = false;
+  } else
+    block_below = options::block_below;
+
+  bool drill;
+  if (solverConfig.contains("drill")) {
+    if (solverConfig.at("drill") == "true")
+      drill = true;
+    else if (solverConfig.at("drill") == "false")
+      drill = false;
+  } else
+    drill = options::drill;
+
+  int geometric_ratio = solverConfig.contains("geo_p")
+                            ? std::stod(solverConfig.at("geo_p"))
+                            : options::geometric_ratio;
+
+  int arithmetic_shift = solverConfig.contains("ari_p")
+                             ? std::stoi(solverConfig.at("ari_p"))
+                             : options::arithmetic_shift;
 
   PBtoCNF *solver = nullptr;
-  if (solverConfig.type == "pmin") {
+  if (algorithm == "pmin") {
     solver = new PMinimalMO(verbosity, weight, partition_strategy, cardinality,
-                            pb, pbobjf);
-  } else if (solverConfig.type == "us") {
+                            pb, pbobjf, apmode, eps, sstrategy, redFactor);
+  } else if (algorithm == "us") {
     solver = new UnsatSatMO(verbosity, weight, partition_strategy, cardinality,
-                            pb, pbobjf);
-  } else if (solverConfig.type == "hs") {
+                            pb, pbobjf, conf_budget);
+  } else if (algorithm == "hs") {
     solver = new HittingSetsMO(verbosity, weight, partition_strategy,
                                cardinality, pb, pbobjf);
-  } else if (solverConfig.type == "sd") {
-    solver = new SlideDrillMO(verbosity, weight, partition_strategy,
-                              cardinality, pb, pbobjf);
+  } else if (algorithm == "sd") {
+    solver = new SlideDrillShuntMO(
+        verbosity, weight, partition_strategy, cardinality, pb, pbobjf, apmode,
+        eps, sstrategy, conf_budget, ascend, lower, wl_type);
   } else {
-    fprintf(stderr, "c Error: Invalid solver type in portfolio config: %s\n",
-            solverConfig.type.c_str());
+    fprintf(stderr,
+            "c Error: Invalid solver algorithm in portfolio config: %s\n",
+            algorithm.c_str());
     exit(_ERROR_);
   }
 
-  solver->setClauseSharingHeuristic(
-      createClauseSharingHeuristic(solverConfig, options::sharing_heuristic));
+  solver->setClauseSharingHeuristic(parseClauseSharingHeuristic(solverConfig));
 
-  int conf_budget = solverConfig.getIntOr("conf_budget", options::conf_budget);
-  if (conf_budget != -1) {
-    solver->setConflictLimit(conf_budget);
-  }
+  solver->setConflictLimit(conf_budget);
 
   return solver;
 }
 
-PortfolioMO *createPortfolioMO(const char *filename, int &argc, char **argv) {
-  PortfolioConfig config =
-      PortfolioConfigParser::parsePortfolioConfig(filename);
-  parseGlobalPortfolioOptions(config.global, parseOptions);
-
-  std::vector<openwbo::PBtoCNF *> solvers;
-  for (std::size_t i = 0; i < config.solvers.size(); ++i) {
-    solvers.push_back(createPortfolioSolver(config.solvers[i]));
+PortfolioMO *createPortfolioMO() {
+  if (options::portfolio_config == NULL) {
+    fprintf(stderr, "c Error: Portfolio config file not specified.\n");
+    exit(_ERROR_);
   }
 
-  parseOptions(argc, argv, true);
+  if (options::n_moco_workers < 1) {
+    int n = options::n_moco_workers;
+    fprintf(stderr,
+            "c Error: Invalid number of workers for parallel MOCO: %d\n", n);
+    exit(_ERROR_);
+  }
+
+  PortfolioConfig config = PortfolioConfigParser::parsePortfolioConfig(
+      std::string(options::portfolio_config));
+
+  if (config.size() != static_cast<std::size_t>(options::n_moco_workers)) {
+    fprintf(stderr,
+            "c Error: Number of workers (%zu) does not match number of "
+            "solvers in portfolio config (%zu).\n",
+            static_cast<std::size_t>(options::n_moco_workers), config.size());
+    exit(_ERROR_);
+  }
+
+  std::vector<openwbo::PBtoCNF *> solvers;
+  for (std::size_t i = 0; i < options::n_moco_workers; ++i) {
+    solvers.push_back(createPortfolioSolver(config[i]));
+  }
 
   PortfolioMO *portfolio = new PortfolioMO(
       options::verbosity, options::weight, options::partition_strategy,
       options::cardinality, options::pb, options::pbobjf, solvers,
-      options::stop_on_first_result, options::share_clauses,
+      options::stop_search_flag, options::share_clauses,
       options::share_solutions);
   portfolio->setPrintModel(options::printmodel);
   return portfolio;
@@ -654,17 +800,9 @@ MaxSAT *buildSolver(int argc, char **argv) {
     S = new DrillMO(verbosity, weight, partition_strategy, cardinality, pb,
                     pbobjf);
     break;
-  case _ALGORITHM_PORTFOLIO_: {
-    if (argc < 3) {
-      printf("c Error: Portfolio algorithm requires a configuration file.\n");
-      printf("s UNKNOWN\n");
-      exit(_ERROR_);
-      break;
-    }
-
-    S = PortfolioConfigParser::createPortfolioMO(argv[2], argc, argv);
+  case _ALGORITHM_PORTFOLIO_:
+    S = PortfolioConfigParser::createPortfolioMO();
     break;
-  }
   case _ALGORITHM_PARPMINIMAL_:
     S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
                           pb, pbobjf, n_moco_workers, share_clauses);

@@ -46,6 +46,7 @@ public:
   void search_MO() override;
   bool slide(size_t wid);
   bool drill(size_t wid);
+  bool drillFromPoint(size_t wid, const YPoint &yp);
   // TODO: implement prune and check, as they are unused in the sequential
   // version
   //

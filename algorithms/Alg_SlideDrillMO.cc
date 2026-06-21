@@ -6,12 +6,8 @@ void SlideDrillMO::search_MO() {
   answerType = _UNSATISFIABLE_;
   if (firstSolution()) {
     runtime = cpuTime();
-    timestats[_time1stSol_] = runtime - initialTime;
-    runstats[_nsatcalls1stSol_] = nbSatisfiable;
     updateMOFormulation();
     blockDominatedRegion(first.yPoint());
-    Model m = make_model(solver->model);
-    solution().pushSafe(m);
     YPoint yp{};
     for (int i = 0, n = getFormula()->nObjFunctions(); i < n; i++)
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
@@ -20,7 +16,7 @@ void SlideDrillMO::search_MO() {
     if (getStopSearchFlag()) {
       answerType = _INTERRUPTED_;
       printf("%sstopSearch has been set to true, another thread requested to "
-             "stop the search. Search stopped.\n",
+             "stop the search. Stopping search now...\n",
              getSolverId().c_str());
       return;
     }
@@ -30,12 +26,7 @@ void SlideDrillMO::search_MO() {
   } else
     answerType = openwbo::_UNSATISFIABLE_;
 
-  requestStopSearch();
-
-  shareSolutions(getShareSolutions());
-  if (!isInsidePortfolio() || (!getShareSolutions() && !getShareClauses())) {
-    printAnswer(answerType);
-  }
+  printAnswer(answerType);
 }
 bool SlideDrillMO::searchBoundHonerMO() {
   YPoint yp{};
@@ -95,20 +86,7 @@ bool SlideDrillMO::drill() {
     }
 
     // look for the first queued element that is not optimal
-    while ((sat = solve()) == l_Undef) {
-      printf("%sc budget exhausted during drill. Retrying...\n",
-             getSolverId().c_str());
-      shareSolutions(getShareSolutions());
-      shareClauses();
-      if (getStopSearchFlag()) {
-        printf("%sstopSearch has been set to true, another thread requested to "
-               "stop the search. Stopping search now...\n",
-               getSolverId().c_str());
-        return false;
-      }
-    }
-
-    if (sat != l_False) {
+    if ((sat = solve()) != l_False) {
       break;
     } else {
       // describe_core(solver->conflict);
@@ -129,16 +107,16 @@ bool SlideDrillMO::drill() {
       return true;
     }
     shareClauses();
+    shareSolutions(getShareSolutions());
   }
   assumptions.clear();
-  // Dead code, TODO: remove
-  // if (sat == l_Undef) {
-  //   cout << getSolverId() << "c budget exhausted during drill. Push " << yp
-  //        << " again" << endl;
-  //   answerType = _BUDGET_;
-  //   waiting_list->unpop(1);
-  //   return false;
-  // }
+  if (sat == l_Undef) {
+    cout << getSolverId() << "c budget exhausted during drill. Push " << yp
+         << " again" << endl;
+    answerType = _BUDGET_;
+    waiting_list->unpop(1);
+    return false;
+  }
   if (sat == l_False)
     return false;
   drill_marker = yp;
@@ -293,21 +271,6 @@ bool SlideDrillMO::slide() {
   }
   Node &n{n_it->second};
   do {
-    while ((sat = solve()) == l_Undef) {
-      printf("%sc budget exhausted during drill. Retrying...\n",
-             getSolverId().c_str());
-      shareSolutions(getShareSolutions());
-      shareClauses();
-      if (getStopSearchFlag()) {
-        printf("%sstopSearch has been set to true, another thread requested to "
-               "stop the search. Stopping search now...\n",
-               getSolverId().c_str());
-        return false;
-      }
-    }
-    if (sat != l_True)
-      break;
-
     Model m = make_model(solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (solution().pushSafe(m)) {
@@ -337,17 +300,17 @@ bool SlideDrillMO::slide() {
       // assumptions
       asssumeIncomparableRegion(yp, l);
       assumptions.push(~l);
+      shareSolutions(getShareSolutions());
+      shareClauses();
     }
+
     if (getStopSearchFlag()) {
       printf("%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());
       return false;
     }
-
-    shareClauses();
-    shareSolutions(getShareSolutions());
-  } while (sat == l_True);
+  } while ((sat = solve()) == l_True);
 
   if (getStopSearchFlag()) {
     printf("%sstopSearch has been set to true, another thread requested to "
@@ -358,22 +321,21 @@ bool SlideDrillMO::slide() {
 
   // fix temporary variables used during slide, which are listed
   // in the assumptions.
-  // TODO: remove this as it is dead code
-  // if (sat == l_Undef) {
-  //   if (!drill_marker.empty()) {
-  //     std::ostringstream oss;
-  //     oss << drill_marker;
-  //     std::osyncstream(std::cout)
-  //         << getSolverId() << "c budget exhausted during slide."
-  //         << " Push " << oss.str() << " again\n"
-  //         << endl;
-  //     waiting_list->unpop(0);
-  //   } else
-  //     std::osyncstream(std::cout)
-  //         << getSolverId() << "c budget exhausted during slide.\n";
-  //   answerType = _BUDGET_;
-  //   return false;
-  // }
+  if (sat == l_Undef) {
+    if (!drill_marker.empty()) {
+      std::ostringstream oss;
+      oss << drill_marker;
+      std::osyncstream(std::cout)
+          << getSolverId() << "c budget exhausted during slide."
+          << " Push " << oss.str() << " again\n"
+          << endl;
+      waiting_list->unpop(0);
+    } else
+      std::osyncstream(std::cout)
+          << getSolverId() << "c budget exhausted during slide.\n";
+    answerType = _BUDGET_;
+    return false;
+  }
   // describe_core(solver->conflict);
   for (auto l : n.deps) {
     solver->addClause(l);

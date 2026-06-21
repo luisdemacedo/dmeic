@@ -98,12 +98,10 @@ function main(){
                 echo "portfolio requires a config file argument."
                 exit 1
             fi
-            config=${extra_args[0]}
-            extra_args=("${extra_args[@]:1}")
 		        # gdb --args \
 	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -geo_p=1 -no-block_below -algorithm=29 -pbobjf=4 -eps=1  -core_optim=2 \
-			    -apmode=1 -no-cubounds -no-clbounds "$instance" "$config" "${extra_args[@]}";;
+			    -apmode=1 -no-cubounds -no-clbounds "$instance" "${extra_args[@]}";;
 
 	parpmin)
 		         # gdb --args \

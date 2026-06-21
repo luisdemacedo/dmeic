@@ -41,6 +41,16 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
   // }
   return true;
 }
+
+bool ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
+  Worker &w = workers[wid];
+  SDWorkerState &ws = worker_states[wid];
+  lbool sat{l_False};
+  std::ostringstream oss;
+  oss << "[" << wid << "] c drill from " << yp << " with hv=" << hv(yp) << "\n";
+  std::osyncstream(std::cout) << oss.str();
+}
+
 // focus region dominating drill point, through manipulation of assumptions
 bool ParSlideDrillMO::drill(size_t wid) {
   Worker &w = workers[wid];
