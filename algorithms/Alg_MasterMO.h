@@ -77,6 +77,7 @@ public:
       shareClauses();
       shareSolutions(getShareSolutions());
     } while (setup_approx());
+    nbSatCalls = optim->nbSatCalls;
     return res;
   }
 

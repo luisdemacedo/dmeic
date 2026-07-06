@@ -197,6 +197,11 @@ public:
 
   void printAnswer(int type) override;
 
+  int getNbSatCalls() const { return nbSatCalls; }
+  void setNbSatCalls(int nb) { nbSatCalls = nb; }
+  int getNbSatisfiable() const { return nbSatisfiable; }
+  void setNbSatisfiable(int nb) { nbSatisfiable = nb; }
+
 protected:
   // Rebuild MaxSAT solver
   //

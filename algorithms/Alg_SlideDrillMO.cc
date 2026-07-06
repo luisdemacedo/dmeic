@@ -356,6 +356,9 @@ void SlideDrillMO::asssumeIncomparableRegion(const YPoint &yp, Lit l) {
     }
   }
   clause.push(l);
+  // ~(objRootLits[0][objix[0]] ∧ objRootLits[1][objix[1]]
+  // ∧ ... ∧
+  // objRootLits[nObj-2][objix[nObj-2]] ∧ objRootLits[nObj-1][objix[nObj-1]])->l
   solver->addClause(clause);
 }
 void SlideDrillMO::describe_core(const conflict_t &conf) {

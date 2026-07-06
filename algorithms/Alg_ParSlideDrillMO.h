@@ -19,6 +19,9 @@
 #include <utility>
 
 namespace openwbo {
+
+enum class PointResult { BudgetExhausted, SAT, UNSAT };
+
 using conflict_t = vec<Lit>;
 class ParSlideDrillMO : public virtual ParallelMO, public virtual Bounded {
   constexpr static bool polarity = true; // because it is a sat-unsat solver;
@@ -46,7 +49,8 @@ public:
   void search_MO() override;
   bool slide(size_t wid);
   bool drill(size_t wid);
-  bool drillFromPoint(size_t wid, const YPoint &yp);
+  PointResult drillFromPoint(size_t wid, const YPoint &yp);
+  PointResult processPoint(size_t wid, const YPoint &yp);
   // TODO: implement prune and check, as they are unused in the sequential
   // version
   //

@@ -1,6 +1,6 @@
 #include "Alg_ParSlideDrillMO.h"
-namespace openwbo {
 
+namespace openwbo {
 void ParSlideDrillMO::search_MO() {
   init();
   buildSolversMO();
@@ -26,29 +26,86 @@ void ParSlideDrillMO::search_MO() {
 }
 bool ParSlideDrillMO::searchBoundHonerMO() {
   // drill
-  while (answerType != _BUDGET_) {
-    // if (!drill())
-    break;
-    // if (slide()) {
-    bool conflicts_empty;
-#pragma omp parallel reduction(&& : conflicts_empty)
-    conflicts_empty =
-        workers[omp_get_thread_num()].solver->conflict.size() == 0;
+  std::atomic<int> active{0};
+#pragma omp parallel num_threads(workers.size())
+  {
+    size_t wid = omp_get_thread_num();
+    while (true) {
 
-    if (conflicts_empty)
-      return true;
+      auto maybe_yp = waiting_list->try_pop();
+      if (!maybe_yp) {
+        if (active.load() == 0 && waiting_list->size() == 0)
+          break;
+
+        continue;
+      }
+
+      active.fetch_add(1);
+      auto yp = *maybe_yp;
+      PointResult result = processPoint(wid, yp);
+
+      if (result == PointResult::BudgetExhausted)
+        waiting_list->insert(yp, true);
+      // }
+    }
   }
-  // }
-  return true;
 }
 
-bool ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
+PointResult ParSlideDrillMO::processPoint(size_t wid, const YPoint &yp) {
+  PointResult result = drillFromPoint(wid, yp);
+  switch (result) {
+  case PointResult::UNSAT:
+  case PointResult::SAT:
+    break;
+  case PointResult::BudgetExhausted:
+    return PointResult::BudgetExhausted;
+  }
+
+  if (!slide(wid))
+    return PointResult::UNSAT;
+  return PointResult::SAT;
+}
+
+PointResult ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
   Worker &w = workers[wid];
   SDWorkerState &ws = worker_states[wid];
   lbool sat{l_False};
   std::ostringstream oss;
-  oss << "[" << wid << "] c drill from " << yp << " with hv=" << hv(yp) << "\n";
+  oss << getSolverId() << "c " << "drill from " << yp << " with hv=" << hv(yp)
+      << "\n";
   std::osyncstream(std::cout) << oss.str();
+
+  auto it = ws.mem.find(yp);
+  if (it != ws.mem.end()) {
+    ws.drill_marker = yp;
+    for (auto l : it->second.deps)
+      w.assumptions.push(~l);
+  }
+
+  oss.str("");
+  oss.clear();
+
+  if ((sat = solve(wid)) == l_False) {
+    oss << getSolverId() << "c "
+        << "if sat, optimal solution (time: " << runtime - initialTime << ")\n";
+    std::osyncstream(std::cout) << oss.str();
+    oss.str("");
+    oss.clear();
+    if (!w.solver->conflict.size())
+      return PointResult::UNSAT; // TODO: add another enum
+  }
+  w.assumptions.clear();
+  if (sat == l_Undef) {
+    oss << getSolverId() << "c " << "budget exhausted during drill. Push " << yp
+        << " again\n";
+    std::osyncstream(std::cout) << oss.str();
+    answerType = _BUDGET_;
+    return PointResult::BudgetExhausted;
+  }
+  if (sat == l_False)
+    return PointResult::UNSAT;
+  ws.drill_marker = yp;
+  return PointResult::SAT;
 }
 
 // focus region dominating drill point, through manipulation of assumptions

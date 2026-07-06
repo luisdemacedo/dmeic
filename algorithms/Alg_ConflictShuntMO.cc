@@ -83,6 +83,15 @@ void ConflictShuntMO::search_MO() {
 }
 StatusCode ConflictShuntMO::searchConflictShuntMO() {
   auto res = _UNKNOWN_;
+  auto seededOptim = optim;
+  auto initialNbSatCalls = nbSatCalls;
+  auto initialNbSatisfiable = nbSatisfiable;
+
+  if (optim) {
+    optim->setNbSatCalls(nbSatCalls);
+    optim->setNbSatisfiable(nbSatisfiable);
+  }
+
   do {
     res = compute_approx();
     if (getStopSearchFlag()) {
@@ -99,6 +108,22 @@ StatusCode ConflictShuntMO::searchConflictShuntMO() {
     if (res != _BUDGET_)
       break;
   } while (setup_approx());
+  nbSatCalls = initialNbSatCalls;
+  nbSatisfiable = initialNbSatisfiable;
+  auto addServerStats = [&](const shared_ptr<PBtoCNFServerMO> &server) {
+    if (!server)
+      return;
+    auto serverNbSatCalls = server->getNbSatCalls();
+    auto serverNbSatisfiable = server->getNbSatisfiable();
+    if (server.get() == seededOptim) {
+      serverNbSatCalls -= initialNbSatCalls;
+      serverNbSatisfiable -= initialNbSatisfiable;
+    }
+    nbSatCalls += serverNbSatCalls;
+    nbSatisfiable += serverNbSatisfiable;
+  };
+  addServerStats(upper);
+  addServerStats(lower);
   return res;
 }
 void ConflictShuntMO::consolidateSolution() {

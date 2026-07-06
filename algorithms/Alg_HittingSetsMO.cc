@@ -92,7 +92,29 @@ bool HittingSetsMO::recycleLowerBoundSet() {
     // checks satisfiability of complete model
     modelClause(modelEmbed(osol.model(), nVars), assmpts);
     nbSatCalls++;
+
+    auto conflicts_before = solver->conflicts;
+    DLOG(stdout,
+         "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
+         "conflicts_before=%lu\n",
+         getSolverId().c_str(), nbSatCalls, assmpts.size(), nConflicts,
+         solver->conflicts);
+
+    auto start = std::chrono::steady_clock::now();
     lbool sat = solver->solveLimited(assmpts);
+    auto end = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    auto res_str = (sat == l_True)    ? "SAT"
+                   : (sat == l_False) ? "UNSAT"
+                                      : "UNDEF";
+
+    DLOG(stdout,
+         "%sc sat_call_end call=%d result=%s time_ms=%.3f "
+         "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
+         getSolverId().c_str(), nbSatCalls, res_str, elapsed_ms,
+         solver->conflicts - conflicts_before, solver->conflicts, nConflicts);
 
     if (sat == l_True) {
       nbSatisfiable++;

@@ -159,17 +159,58 @@ bool PBtoCNF::satisfiedSoft(int i) {
 
 lbool PBtoCNF::solve() {
 
-  nbSatCalls++;
+  struct SatCallMetrics {
+    lbool res;
+    uint64_t conflicts_before;
+    double elapsed_ms;
+  };
+
+  auto begin_sat_call = [&]() {
+    nbSatCalls++;
+    auto conflicts_before = solver->conflicts;
+
+    DLOG(stdout,
+         "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
+         "conflicts_before=%lu\n",
+         getSolverId().c_str(), nbSatCalls, assumptions.size(), nConflicts,
+         solver->conflicts);
+
+    auto start = std::chrono::steady_clock::now();
+    lbool res = solver->solveLimited(assumptions);
+    auto end = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    if (res == l_True)
+      nbSatisfiable++;
+
+    return SatCallMetrics{res, conflicts_before, elapsed_ms};
+  };
+
+  auto end_sat_call = [&](SatCallMetrics metrics) {
+    auto res_str = (metrics.res == l_True)    ? "SAT"
+                   : (metrics.res == l_False) ? "UNSAT"
+                                              : "UNDEF";
+
+    DLOG(stdout,
+         "%sc sat_call_end call=%d result=%s time_ms=%.3f "
+         "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
+         getSolverId().c_str(), nbSatCalls, res_str, metrics.elapsed_ms,
+         solver->conflicts - metrics.conflicts_before, solver->conflicts,
+         nConflicts);
+  };
+
   lbool res;
 #ifdef SIMP
-  res = ((SimpSolver *)solver)->solveLimited(assumptions);
+  auto metrics = begin_sat_call();
+  res = metrics.res;
+  end_sat_call(metrics);
 #else
   if (conflict_limit < 0) {
     solver->budgetOff();
-    res = solver->solveLimited(assumptions);
-    if (res == l_True)
-      nbSatisfiable++;
-    return res;
+    auto metrics = begin_sat_call();
+    end_sat_call(metrics);
+    return metrics.res;
   }
   // signals the exhaustion of the budget.  Reset the limit, and go on.
   if (nConflicts < 0) {
@@ -179,9 +220,9 @@ lbool PBtoCNF::solve() {
   auto old = nConflicts;
   solver->setConfBudget(nConflicts);
   nConflicts += solver->conflicts;
-  res = solver->solveLimited(assumptions);
-  if (res == l_True)
-    nbSatisfiable++;
+  auto metrics = begin_sat_call();
+  res = metrics.res;
+
   nConflicts -= solver->conflicts;
   // ensure every unsat call spends at least one conflict:
   if (old == nConflicts && res == l_False)
@@ -190,6 +231,8 @@ lbool PBtoCNF::solve() {
   if (res == l_Undef) {
     nConflicts = conflict_limit;
   }
+
+  end_sat_call(metrics);
 #endif
   return res;
 }
@@ -1470,10 +1513,12 @@ bool PBtoCNF::firstSolution() {
   printf("c first call to solver\n");
   int old = conflict_limit;
   conflict_limit = -1;
+
   lbool res = solve();
   conflict_limit = old;
 
   double totaltime_1stsol = cpuTime() - before_1stsol;
+
   printf("c time for %s: %f\n", (res == l_True) ? "SAT" : "UNSAT",
          totaltime_1stsol);
 

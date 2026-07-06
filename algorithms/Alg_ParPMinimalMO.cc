@@ -119,6 +119,8 @@ void ParPMinimalMO::searchParPMinimalMO(size_t wid) {
   } while ((sat = solve(wid)) != l_True &&
            (sat == l_Undef || w.solver->conflict.size() > 0));
 
+  w.nbSatCalls1stSol = w.nbSatCalls;
+
   for (; sat == l_True;) {
     for (; sat == l_True;) {
       Model m = make_model(w.solver->model);

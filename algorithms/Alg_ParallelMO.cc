@@ -370,16 +370,58 @@ void ParallelMO::init() { // Copied from PBtoCNF
 
 lbool ParallelMO::solve(size_t wid) {
   auto &w = workers[wid];
-#pragma omp atomic
-  nbSatCalls++;
+  struct SatCallMetrics {
+    lbool res;
+    uint64_t conflicts_before;
+    double elapsed_ms;
+  };
+
+  auto begin_sat_call = [&]() {
+    w.nbSatCalls++;
+    auto conflicts_before = w.solver->conflicts;
+
+    DLOG(stdout,
+         "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
+         "conflicts_before=%lu\n",
+         getSolverId().c_str(), w.nbSatCalls, w.assumptions.size(),
+         w.nConflicts, w.solver->conflicts);
+
+    auto start = std::chrono::steady_clock::now();
+    lbool res = w.solver->solveLimited(w.assumptions);
+    auto end = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(end - start).count();
+
+    if (res == l_True)
+      w.nbSatisfiable++;
+
+    return SatCallMetrics{res, conflicts_before, elapsed_ms};
+  };
+
+  auto end_sat_call = [&](SatCallMetrics metrics) {
+    auto res_str = (metrics.res == l_True)    ? "SAT"
+                   : (metrics.res == l_False) ? "UNSAT"
+                                              : "UNDEF";
+
+    DLOG(stdout,
+         "%sc sat_call_end call=%d result=%s time_ms=%.3f "
+         "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
+         getSolverId().c_str(), w.nbSatCalls, res_str, metrics.elapsed_ms,
+         w.solver->conflicts - metrics.conflicts_before, w.solver->conflicts,
+         w.nConflicts);
+  };
 
   lbool res;
 #ifdef SIMP
-  res = ((SimpSolver *)solver)->solveLimited(assumptions[solver_id]);
+  auto metrics = begin_sat_call();
+  res = metrics.res;
+  end_sat_call(metrics);
 #else
   if (conflict_limit < 0) {
     w.solver->budgetOff();
-    return w.solver->solveLimited(w.assumptions);
+    auto metrics = begin_sat_call();
+    end_sat_call(metrics);
+    return metrics.res;
   }
 
   // signals the exhaustion of the budget. Reset the limit, and go on
@@ -391,19 +433,22 @@ lbool ParallelMO::solve(size_t wid) {
   auto old = w.nConflicts;
   w.solver->setConfBudget(w.nConflicts);
   w.nConflicts += w.solver->conflicts;
-  res = w.solver->solveLimited(w.assumptions);
-  if (res == l_True)
-#pragma omp atomic
-    nbSatisfiable++;
+  auto metrics = begin_sat_call();
+  res = metrics.res;
 
   w.nConflicts -= w.solver->conflicts;
+
   // ensure every unsat call spends at least one conflict:
   if (old == w.nConflicts && res == l_False)
     w.nConflicts--;
   // if undef, reset nConflicts
   if (res == l_Undef)
     w.nConflicts = conflict_limit;
+
+  end_sat_call(metrics);
+
 #endif
+
   return res;
 }
 
@@ -415,26 +460,43 @@ bool ParallelMO::firstSolution(size_t wid) {
   double before1stsol = cpuTime();
   std::osyncstream(std::cout) << getSolverId() << " c first call to solver\n";
 
-#pragma omp atomic
-  nbSatCalls++;
+  w.nbSatCalls++;
 
   w.solver->budgetOff();
+  auto conflicts_before = w.solver->conflicts;
+  DLOG(stdout,
+       "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
+       "conflicts_before=%lu\n",
+       getSolverId().c_str(), w.nbSatCalls, w.assumptions.size(), w.nConflicts,
+       w.solver->conflicts);
+
   lbool res = w.solver->solveLimited(w.assumptions);
+
+  auto res_str = (res == l_True) ? "SAT" : (res == l_False) ? "UNSAT" : "UNDEF";
+
   double total_time = cpuTime() - before1stsol;
+
+  DLOG(stdout,
+       "%sc sat_call_end call=%d result=%s time_ms=%.3f "
+       "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
+       getSolverId().c_str(), w.nbSatCalls, res_str, total_time,
+       w.solver->conflicts - conflicts_before, w.solver->conflicts,
+       w.nConflicts);
+
   std::osyncstream(std::cout)
       << getSolverId() << " c first call to solver time:" << total_time << "\n";
   if (res != l_True)
     return false;
 
-#pragma omp atomic
-  nbSatisfiable++;
+  w.nbSatisfiable++;
 
   w.first = Solution::OneSolution{&w.solutions, make_model(w.solver->model)};
   return true;
 }
 
 bool ParallelMO::updateMOFormulationIfSAT(size_t wid) {
-  printf("c [updateMOFormulationIfSAT]\n");
+  std::osyncstream(std::cout)
+      << getSolverId() << " c [updateMOFormulationIfSAT]\n";
   //     solver->my_print();
 
   if (!firstSolution(wid))
@@ -445,7 +507,7 @@ bool ParallelMO::updateMOFormulationIfSAT(size_t wid) {
 
 bool ParallelMO::updateMOFormulation(size_t wid) {
   Worker &w = workers[wid];
-  printf("c [updateMOFormulation]\n");
+  std::osyncstream(std::cout) << getSolverId() << " c updateMOFormulation\n";
   if (w.nreencodes == 0) {
     int nObj = getFormula()->nObjFunctions();
     // for (int di = 0; di < nObj; di++)
