@@ -58,6 +58,9 @@ public:
       return std::nullopt;
     return pop();
   }
+  virtual void requeue(const YPoint &yp, int note = 0) {
+    insert(yp, true, note);
+  }
 
 protected:
   int max_size = 0;

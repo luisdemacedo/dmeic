@@ -12,7 +12,8 @@ void ParSlideDrillMO::search_MO() {
     updateMOFormulation(omp_get_thread_num());
 
 #pragma omp parallel
-    blockDominatedRegion(omp_get_thread_num(), workers[0].first.yPoint());
+    blockDominatedRegion(omp_get_thread_num(),
+                         workers[main_solver].first.yPoint());
     YPoint yp{};
     for (int i = 0, n = getFormula()->nObjFunctions(); i < n; i++)
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
@@ -27,197 +28,157 @@ void ParSlideDrillMO::search_MO() {
 bool ParSlideDrillMO::searchBoundHonerMO() {
   // drill
   std::atomic<int> active{0};
+  std::atomic<bool> stop{false};
 #pragma omp parallel num_threads(workers.size())
   {
     size_t wid = omp_get_thread_num();
-    while (true) {
+    while (!stop.load()) {
 
-      auto maybe_yp = waiting_list->try_pop();
+      std::optional<YPoint> maybe_yp = std::nullopt;
+      maybe_yp = waiting_list->try_pop();
       if (!maybe_yp) {
         if (active.load() == 0 && waiting_list->size() == 0)
           break;
 
         continue;
       }
-
       active.fetch_add(1);
-      auto yp = *maybe_yp;
-      PointResult result = processPoint(wid, yp);
+      DrillResult result = drillFromPoint(wid, *maybe_yp);
 
-      if (result == PointResult::BudgetExhausted)
-        waiting_list->insert(yp, true);
-      // }
+      if (result == DrillResult::FoundModel) {
+        slide(wid);
+      } else if (result == DrillResult::UnsatCore) {
+        // Skip
+      } else if (result == DrillResult::UnsatNoCore) {
+        stop.store(true);
+      } else if (result == DrillResult::Budget) {
+        waiting_list->requeue(maybe_yp.value(), 1);
+      }
+      active.fetch_sub(1);
     }
   }
+  answerType = _OPTIMUM_;
+  return true;
 }
 
-PointResult ParSlideDrillMO::processPoint(size_t wid, const YPoint &yp) {
-  PointResult result = drillFromPoint(wid, yp);
-  switch (result) {
-  case PointResult::UNSAT:
-  case PointResult::SAT:
-    break;
-  case PointResult::BudgetExhausted:
-    return PointResult::BudgetExhausted;
-  }
-
-  if (!slide(wid))
-    return PointResult::UNSAT;
-  return PointResult::SAT;
-}
-
-PointResult ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
+DrillResult ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
   Worker &w = workers[wid];
   SDWorkerState &ws = worker_states[wid];
   lbool sat{l_False};
+  w.assumptions.clear();
   std::ostringstream oss;
   oss << getSolverId() << "c " << "drill from " << yp << " with hv=" << hv(yp)
       << "\n";
   std::osyncstream(std::cout) << oss.str();
 
-  auto it = ws.mem.find(yp);
-  if (it != ws.mem.end()) {
-    ws.drill_marker = yp;
-    for (auto l : it->second.deps)
-      w.assumptions.push(~l);
+#pragma omp critical(mem)
+  {
+    auto it = mem.find(yp);
+    assumeDominatingRegion(wid, yp);
+    if (it != mem.end()) {
+      ws.drill_marker = yp;
+      for (auto l : it->second.deps)
+        w.assumptions.push(~l);
+    }
   }
 
   oss.str("");
   oss.clear();
 
-  if ((sat = solve(wid)) == l_False) {
+  sat = solve(wid);
+  if (sat == l_False) {
     oss << getSolverId() << "c "
         << "if sat, optimal solution (time: " << runtime - initialTime << ")\n";
     std::osyncstream(std::cout) << oss.str();
     oss.str("");
     oss.clear();
     if (!w.solver->conflict.size())
-      return PointResult::UNSAT; // TODO: add another enum
-  }
-  w.assumptions.clear();
-  if (sat == l_Undef) {
+      return DrillResult::UnsatNoCore;
+    return DrillResult::UnsatCore;
+  } else if (sat == l_Undef) {
     oss << getSolverId() << "c " << "budget exhausted during drill. Push " << yp
         << " again\n";
     std::osyncstream(std::cout) << oss.str();
-    answerType = _BUDGET_;
-    return PointResult::BudgetExhausted;
+    return DrillResult::Budget;
   }
-  if (sat == l_False)
-    return PointResult::UNSAT;
   ws.drill_marker = yp;
-  return PointResult::SAT;
-}
-
-// focus region dominating drill point, through manipulation of assumptions
-bool ParSlideDrillMO::drill(size_t wid) {
-  Worker &w = workers[wid];
-  SDWorkerState &ws = worker_states[wid];
-  lbool sat{l_False};
-  YPoint yp{};
-  while (waiting_list->size()) { // TODO: sync the waiting_list
-    w.assumptions.clear();
-    yp = waiting_list->pop(); // TODO: sync the waiting_list
-
-    std::ostringstream oss;
-    oss << "[" << wid << "] c drill from " << yp << " with hv=" << hv(yp)
-        << "\n";
-    std::osyncstream(std::cout) << oss.str();
-    auto it = ws.mem.find(yp);
-    // assume dominating region, until the next drill takes place.
-    assumeDominatingRegion(wid, yp);
-    if (it != ws.mem.end()) {
-      ws.drill_marker = yp;
-      for (auto l : it->second.deps)
-        w.assumptions.push(~l);
-    }
-
-    // look for the first queued element that is not optimal
-    if ((sat = solve(wid)) != l_False)
-      break;
-    else {
-      fprintf(stdout, "[%zu] c if sat, optimal solution (time: %.3f)\n", wid,
-              runtime - initialTime);
-      if (!w.solver->conflict.size())
-        return false;
-      oss.str("");
-      oss.clear();
-      oss << "[" << wid << "] c o " << yp << "\n";
-    }
-  }
-  w.assumptions.clear();
-  if (sat == l_Undef) {
-    std::ostringstream oss;
-    oss << "[" << wid << "] c budget exhausted during drill. Push " << yp
-        << " again\n";
-    std::osyncstream(std::cout) << oss.str();
-    answerType = _BUDGET_;
-    waiting_list->unpop(1);
-    return false;
-  }
-  if (sat == l_False)
-    return false;
-  ws.drill_marker = yp;
-  return true;
+  return DrillResult::FoundModel;
 }
 
 // temporarily disable region dominating yp, so that the solver will slide
 bool ParSlideDrillMO::slide(size_t wid) {
-  //   lbool sat{};
-  //   auto n_it = mem.find(drill_marker);
-  //   PBtoCNF::assumeDominatingRegion(drill_marker);
-  //   if (n_it != mem.end()) {
-  //     std::cout << "c restart slide under " << drill_marker << endl;
-  //     // block region below slide produces
-  //     for (auto dep : n_it->second.deps)
-  //       assumptions.push(~dep);
-  //   } else {
-  //     Node n{drill_marker};
-  //     auto pair = mem.insert({drill_marker, n});
-  //     n_it = pair.first;
-  //   }
-  //   Node &n{n_it->second};
-  //   do {
-  //     Model m = make_model(solver->model);
-  //     // Only block dominated region if m1 gets into the Solution
-  //     if (solution().pushSafe(m)) {
-  //       // block region dominated by last point
-  //       auto sol = solution().oneSolution();
-  //       auto yp = sol.yPoint();
-  //       // create slide variable for newly found solution
-  //       auto l = mkLit(solver->newVar());
-  //       n.deps.push_back(l);
-  //       slide_map[l] = yp;
-  //       waiting_list->insert(yp);
-  //       printf("c o ");
-  //       std::cout << sol << std::endl;
-  //       runtime = cpuTime();
-  //       printf("c new suboptimal solution (time: %.3f)\n", runtime -
-  //       initialTime);
-  //       // temporarily avoid region dominating last point
-  //       std::cout << "c " << "slide from " << yp << endl;
-  //       blockStep(yp);
-  //       // add temporary clause, and set toggling variable through global
-  //       // assumptions
-  //       asssumeIncomparableRegion(yp, l);
-  //       assumptions.push(~l);
-  //     }
-  //   } while ((sat = solve()) == l_True);
-  //   // fix temporary variables used during slide, which are listed
-  //   // in the assumptions.
-  //   if (sat == l_Undef) {
-  //     std::cout << "c budget exhausted during slide.";
-  //     if (!drill_marker.empty()) {
-  //       std::cout << " Push " << drill_marker << " again";
-  //       waiting_list->unpop(0);
-  //     }
-  //     std::cout << endl;
-  //     answerType = _BUDGET_;
-  //     return false;
-  //   }
-  //   for (auto l : n.deps) {
-  //     solver->addClause(l);
-  //   }
-  //   mem.erase(drill_marker);
+  auto &w = workers[wid];
+  auto &ws = worker_states[wid];
+  Node *n = nullptr;
+  lbool sat{};
+  assumeDominatingRegion(wid, ws.drill_marker);
+#pragma omp critical(mem)
+  {
+    auto n_it = mem.find(ws.drill_marker);
+    if (n_it != mem.end()) {
+      std::cout << "c restart slide under " << ws.drill_marker << endl;
+      // block region below slide produces
+      for (auto dep : n_it->second.deps)
+        w.assumptions.push(~dep);
+    } else {
+      Node n{ws.drill_marker};
+      auto pair = mem.insert({ws.drill_marker, n});
+      n_it = pair.first;
+    }
+    n = &n_it->second;
+  }
+  do {
+    Model m = make_model(w.solver->model);
+    // Only block dominated region if m1 gets into the Solution
+    if (w.solutions.pushSafe(m)) {
+      // block region dominated by last point
+      YPoint yp = evalModel(m);
+      Lit l;
+      // create slide variable for newly found solution
+#pragma omp critical(slide_map)
+      {
+
+        std::vector<Lit> lits;
+        lits.resize(workers.size());
+        for (size_t i = 0; i < workers.size(); i++)
+          lits[i] = mkLit(workers[i].solver->newVar());
+        assert(std::all_of(lits.begin(), lits.end(),
+                           [&](Lit l) { return l.x != lits.front().x; }));
+        l = lits[wid];
+        n->deps.push_back(l);
+        slide_map[l] = yp;
+      }
+      waiting_list->insert(yp);
+      // printf("c o ");
+      // std::cout << sol << std::endl;
+      runtime = cpuTime();
+      printf("c new suboptimal solution (time: %.3f)\n", runtime - initialTime);
+      // temporarily avoid region dominating last point
+      std::cout << "c " << "slide from " << yp << endl;
+      blockStep(wid, yp); // block region dominated by yp
+      // add temporary clause, and set toggling variable through global
+      // assumptions
+      asssumeIncomparableRegion(wid, yp, l);
+      w.assumptions.push(~l);
+    }
+  } while ((sat = solve(wid)) == l_True);
+  // fix temporary variables used during slide, which are listed
+  // in the assumptions.
+  if (sat == l_Undef) {
+    std::cout << "c budget exhausted during slide.";
+    if (!ws.drill_marker.empty()) {
+      std::cout << " Push " << ws.drill_marker << " again";
+      waiting_list->requeue(ws.drill_marker, 1);
+    }
+    std::cout << endl;
+    // answerType = _BUDGET_;
+    return false;
+  }
+  for (auto l : n->deps) {
+    w.solver->addClause(l);
+  }
+#pragma omp critical(mem)
+  mem.erase(ws.drill_marker);
   return true;
 }
 void ParSlideDrillMO::asssumeIncomparableRegion(size_t wid, const YPoint &yp,

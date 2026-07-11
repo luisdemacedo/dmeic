@@ -41,7 +41,7 @@ public:
         answerType = res;
       if (getStopSearchFlag()) {
         answerType = _INTERRUPTED_;
-        DLOG(stdout,
+        DLOG(LogCategory::General, stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
@@ -63,7 +63,7 @@ public:
     do {
       res = compute_approx();
       if (getStopSearchFlag()) {
-        DLOG(stdout,
+        DLOG(LogCategory::General, stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());

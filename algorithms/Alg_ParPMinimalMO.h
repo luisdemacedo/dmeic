@@ -37,8 +37,12 @@ public:
   ~ParPMinimalMO() {}
 
   void searchParPMinimalMO(size_t wid);
+  void findRandomizedInitialSolutions(double sampleFraction = 0.1);
   void search_MO() override;
   void shareSolution(openwbo::Solution::OneSolution osol);
+  std::vector<Lit>
+  sampleObjectiveLits(const std::vector<std::vector<Lit>> &remainingObjLits,
+                      double sampleFraction, std::mt19937 &rng);
 
 protected:
   vec<Lit> explanation; // unsat explanation

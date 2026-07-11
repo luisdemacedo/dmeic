@@ -56,13 +56,14 @@ public:
     auto t_start = clock::now();
     size_t sharedBefore = published.load(std::memory_order_acquire);
     std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
-    DLOG(stdout, "[s%d] Trying to acquire shared solutions lock...\n",
+    DLOG(LogCategory::SolutionSharing, stdout,
+         "[s%d] Trying to acquire shared solutions lock...\n",
          omp_get_thread_num());
     lock.lock();
 
     auto t_lock_acquired = clock::now();
-    DLOG(stdout, "[s%d] Acquired shared solutions lock...\n",
-         omp_get_thread_num());
+    DLOG(LogCategory::SolutionSharing, stdout,
+         "[s%d] Acquired shared solutions lock...\n", omp_get_thread_num());
 
     std::vector<openwbo::Solution::OneSolution> result = {};
 
@@ -83,7 +84,7 @@ public:
     syncTimeByThread[thread_id] += callSyncTime;
     lockWaitTimeByThread[thread_id] += callLockWaitTime;
 
-    DLOG(stdout,
+    DLOG(LogCategory::SolutionSharing, stdout,
          "[s%d] syncSolutions call: %lld ms, wait: %lld ms, held: %lld ms, "
          "candidates: %zu, shared solutions (before): %zu, shared solutions "
          "(after): %zu\n",
@@ -155,7 +156,7 @@ public:
     auto callPushTime =
         std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start);
     pushTimeByThread[thread_id] += callPushTime;
-    DLOG(stdout,
+    DLOG(LogCategory::SolutionSharing, stdout,
          "[s%d] pushSolutions call: %lld ms, candidates: %zu, pushed: %zu\n",
          omp_get_thread_num(),
          static_cast<long long>(
@@ -182,7 +183,7 @@ public:
 
     pullTimeByThread[thread_id] += callPullTime;
 
-    DLOG(stdout,
+    DLOG(LogCategory::SolutionSharing, stdout,
          "[s%d] pullSolutions call: %lld ms, solutions in pool: %zu, pulled: "
          "%zu\n",
          omp_get_thread_num(),
@@ -203,20 +204,20 @@ public:
     if (overflow) {
       std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
       if (lock.owns_lock()) {
-        DLOG(stdout,
+        DLOG(LogCategory::SolutionSharing, stdout,
              "[shared-solutions] getSolutions: overflow path, acquired lock; "
              "scanning full archive\n");
         for (auto &entry : archive)
           if (!entry.dominated.load(std::memory_order_acquire))
             result.push_back(std::make_pair(entry.added_by_thread, entry.sol));
 
-        DLOG(stdout,
+        DLOG(LogCategory::SolutionSharing, stdout,
              "[shared-solutions] getSolutions: full archive result=%zu\n",
              result.size());
         return result;
       } else {
         DLOG(
-            stdout,
+            LogCategory::SolutionSharing, stdout,
             "[shared-solutions] getSolutions: overflow path, lock unavailable; "
             "falling back to published prefix, output may be incomplete\n");
         for (size_t i = 0; i < n; i++)
@@ -227,8 +228,9 @@ public:
       }
     }
 
-    DLOG(stdout, "[shared-solutions] getSolutions: normal path; scanning "
-                 "published prefix\n");
+    DLOG(LogCategory::SolutionSharing, stdout,
+         "[shared-solutions] getSolutions: normal path; scanning "
+         "published prefix\n");
     for (size_t i = 0; i < n; i++)
       if (!entries[i]->dominated.load(std::memory_order_acquire))
         result.push_back(

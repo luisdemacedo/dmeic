@@ -136,6 +136,9 @@ protected:
 
   void blockDominatedRegion(size_t worker_id, const YPoint &yp);
   void blockDominatedRegion(size_t worker_id, uint64_t *objix, int nObj);
+
+  int blockStep(size_t worker_id, const YPoint &yp);
+
   int assumeDominatingRegion(size_t worker_id, const YPoint &yp);
   void assumeDominatingRegion(size_t worker_id, uint64_t *objix, int nObj);
 

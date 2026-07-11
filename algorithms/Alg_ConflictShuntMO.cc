@@ -59,7 +59,7 @@ void ConflictShuntMO::search_MO() {
     auto res = searchConflictShuntMO();
     if (getStopSearchFlag()) {
       answerType = _INTERRUPTED_;
-      DLOG(stdout,
+      DLOG(LogCategory::SatCalls, stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Search stopped.\n",
            getSolverId().c_str());
@@ -96,7 +96,7 @@ StatusCode ConflictShuntMO::searchConflictShuntMO() {
     res = compute_approx();
     if (getStopSearchFlag()) {
       answerType = _INTERRUPTED_;
-      DLOG(stdout,
+      DLOG(LogCategory::SatCalls, stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Search stopped.\n",
            getSolverId().c_str());

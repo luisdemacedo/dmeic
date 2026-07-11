@@ -240,7 +240,7 @@ void ParallelMO::printSolutions() {
   std::osyncstream(std::cout) << line << "\n";
 }
 void ParallelMO::buildSolversMO() {
-  DLOG(stdout,
+  DLOG(LogCategory::General, stdout,
        "c [ParallelMO] buildSolversMO -- nVars: "
        "%d nHard: %d nSoft: %d nPB: %d nObj: %d\n",
        getFormula()->nVars(), getFormula()->nHard(), getFormula()->nSoft(),
@@ -380,7 +380,7 @@ lbool ParallelMO::solve(size_t wid) {
     w.nbSatCalls++;
     auto conflicts_before = w.solver->conflicts;
 
-    DLOG(stdout,
+    DLOG(LogCategory::SatCalls, stdout,
          "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
          "conflicts_before=%lu\n",
          getSolverId().c_str(), w.nbSatCalls, w.assumptions.size(),
@@ -403,7 +403,7 @@ lbool ParallelMO::solve(size_t wid) {
                    : (metrics.res == l_False) ? "UNSAT"
                                               : "UNDEF";
 
-    DLOG(stdout,
+    DLOG(LogCategory::SatCalls, stdout,
          "%sc sat_call_end call=%d result=%s time_ms=%.3f "
          "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
          getSolverId().c_str(), w.nbSatCalls, res_str, metrics.elapsed_ms,
@@ -464,7 +464,7 @@ bool ParallelMO::firstSolution(size_t wid) {
 
   w.solver->budgetOff();
   auto conflicts_before = w.solver->conflicts;
-  DLOG(stdout,
+  DLOG(LogCategory::SatCalls, stdout,
        "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
        "conflicts_before=%lu\n",
        getSolverId().c_str(), w.nbSatCalls, w.assumptions.size(), w.nConflicts,
@@ -476,7 +476,7 @@ bool ParallelMO::firstSolution(size_t wid) {
 
   double total_time = cpuTime() - before1stsol;
 
-  DLOG(stdout,
+  DLOG(LogCategory::SatCalls, stdout,
        "%sc sat_call_end call=%d result=%s time_ms=%.3f "
        "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
        getSolverId().c_str(), w.nbSatCalls, res_str, total_time,
@@ -833,4 +833,9 @@ void ParallelMO::printApproxRatio() {
       << std::format("c eapprox <= {:.4f}\n", expepsilon);
   std::osyncstream(std::cout) << "c ------- " << "\n";
   repsilon = realeps;
+}
+
+int ParallelMO::blockStep(size_t wid, const YPoint &yp) {
+  blockDominatedRegion(wid, yp);
+  return -1;
 }

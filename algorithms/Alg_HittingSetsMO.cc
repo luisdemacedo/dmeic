@@ -94,7 +94,7 @@ bool HittingSetsMO::recycleLowerBoundSet() {
     nbSatCalls++;
 
     auto conflicts_before = solver->conflicts;
-    DLOG(stdout,
+    DLOG(LogCategory::SatCalls, stdout,
          "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
          "conflicts_before=%lu\n",
          getSolverId().c_str(), nbSatCalls, assmpts.size(), nConflicts,
@@ -110,7 +110,7 @@ bool HittingSetsMO::recycleLowerBoundSet() {
                    : (sat == l_False) ? "UNSAT"
                                       : "UNDEF";
 
-    DLOG(stdout,
+    DLOG(LogCategory::SatCalls, stdout,
          "%sc sat_call_end call=%d result=%s time_ms=%.3f "
          "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
          getSolverId().c_str(), nbSatCalls, res_str, elapsed_ms,

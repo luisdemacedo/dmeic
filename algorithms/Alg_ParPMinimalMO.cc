@@ -42,6 +42,7 @@ void ParPMinimalMO::search_MO() {
     if (std::all_of(resform.get(), resform.get() + workers.size(),
                     std::identity{})) {
       printf("c search\n");
+      findRandomizedInitialSolutions();
 #pragma omp parallel num_threads(workers.size())
       {
         size_t wid = omp_get_thread_num();
@@ -92,32 +93,104 @@ void ParPMinimalMO::search_MO() {
   printAnswer(answerType);
 }
 
+void ParPMinimalMO::findRandomizedInitialSolutions(double sampleFraction) {
+  assert(sampleFraction > 0.0 && sampleFraction <= 1.0);
+  int nObj = maxsat_formula->nObjFunctions();
+  const std::uint32_t baseSeed = std::random_device{}();
+  std::vector<std::vector<Lit>> objectiveLitPools(nObj);
+  std::unordered_map<int, std::vector<std::size_t>> objectivesOfLit;
+  std::vector<std::unordered_map<int, std::size_t>> LitToObjectivePosition(
+      nObj);
+
+  for (int i = 0; i < nObj; i++) {
+    objectiveLitPools[i].resize(getFormula()->getObjFunction(i)->_lits.size());
+    for (int j = 0; j < getFormula()->getObjFunction(i)->_lits.size(); j++) {
+      objectiveLitPools[i][j] = getFormula()->getObjFunction(i)->_lits[j];
+      LitToObjectivePosition[i][getFormula()->getObjFunction(i)->_lits[j].x] =
+          j;
+      objectivesOfLit[getFormula()->getObjFunction(i)->_lits[j].x].push_back(i);
+    }
+  }
+
+#pragma omp parallel num_threads(workers.size())
+  {
+    size_t wid = omp_get_thread_num();
+    Worker &w = workers[wid];
+    std::seed_seq seed{baseSeed, static_cast<std::uint32_t>(wid)};
+    std::mt19937 rng(seed);
+    lbool sat = l_False;
+
+    do { // Randomizing the starting point
+      shareClauses(wid);
+      vec<Lit> core;
+      for (int i = 0; i < w.solver->conflict.size(); i++)
+        core.push(w.solver->conflict[i]);
+
+      if (core.size())
+        w.solver->addClause(core);
+
+      std::size_t poolSizeBefore = 0;
+      std::size_t poolSizeAfter = 0;
+
+#pragma omp critical(objective_lit_pools)
+      {
+        for (const auto &pool : objectiveLitPools)
+          poolSizeBefore += pool.size();
+
+        for (int i = 0; i < core.size(); i++) {
+          Lit lit = core[i];
+
+          for (const size_t &objIdx : objectivesOfLit[lit.x]) {
+            const size_t pos = LitToObjectivePosition[objIdx].at(lit.x);
+            std::swap(objectiveLitPools[objIdx][pos],
+                      objectiveLitPools[objIdx].back());
+            LitToObjectivePosition[objIdx][objectiveLitPools[objIdx][pos].x] =
+                pos;
+            objectiveLitPools[objIdx].pop_back();
+            LitToObjectivePosition[objIdx].erase(lit.x);
+          }
+          objectivesOfLit.erase(lit.x);
+        }
+
+        for (const auto &pool : objectiveLitPools)
+          poolSizeAfter += pool.size();
+      }
+
+      if (core.size() > 0)
+        DLOG(LogCategory::Sampling, stdout,
+             "%sc shrinking objective lit pools, core size=%d, before=%zu, "
+             "after=%zu, removed=%zu\n",
+             getSolverId().c_str(), core.size(), poolSizeBefore, poolSizeAfter,
+             poolSizeBefore - poolSizeAfter);
+
+      w.assumptions.clear();
+      std::vector<Lit> sampledLits =
+          sampleObjectiveLits(objectiveLitPools, sampleFraction, rng);
+
+      for (const auto &lit : sampledLits)
+        w.assumptions.push(~lit);
+
+    } while ((sat = solve(wid)) != l_True &&
+             (sat == l_Undef || w.solver->conflict.size() > 0));
+
+    assert(sat == l_True);
+    Model m = make_model(w.solver->model);
+    YPoint yp = evalModel(m);
+    std::osyncstream(std::cout)
+        << getSolverId()
+        << "c initial solution found (time: " << cpuTime() - initialTime
+        << ")\n";
+  }
+}
+
 void ParPMinimalMO::searchParPMinimalMO(size_t wid) {
   auto &w = workers[wid];
   double runtime = cpuTime();
   int nObj = maxsat_formula->nObjFunctions();
 
   YPoint ul(nObj);
-  std::mt19937 rng(std::random_device{}());
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
 
-  lbool sat;
-  do { // Randomizing the starting point
-    vec<Lit> core;
-    for (size_t i = 0; i < w.solver->conflict.size(); i++)
-      core.push(w.solver->conflict[i]);
-
-    if (core.size())
-      w.solver->addClause(core);
-
-    w.assumptions.clear();
-    for (size_t i = 0; i < nObj; i++) {
-      for (size_t j = 0; j < getFormula()->getObjFunction(i)->_lits.size(); j++)
-        if (dist(rng) < 0.1)
-          w.assumptions.push(getFormula()->getObjFunction(i)->_lits[j]);
-    }
-  } while ((sat = solve(wid)) != l_True &&
-           (sat == l_Undef || w.solver->conflict.size() > 0));
+  lbool sat = l_True;
 
   w.nbSatCalls1stSol = w.nbSatCalls;
 
@@ -164,4 +237,23 @@ void ParPMinimalMO::searchParPMinimalMO(size_t wid) {
     }
   }
   return;
+}
+
+std::vector<Lit> ParPMinimalMO::sampleObjectiveLits(
+    const std::vector<std::vector<Lit>> &remainingObjLits,
+    double sampleFraction, std::mt19937 &rng) {
+  std::vector<Lit> sampledLits;
+
+#pragma omp critical(objective_lit_pools)
+  {
+    for (const auto &objLits : remainingObjLits) {
+      const size_t sampleSize =
+          static_cast<size_t>(std::ceil(objLits.size() * sampleFraction));
+
+      std::sample(objLits.begin(), objLits.end(),
+                  std::back_inserter(sampledLits), sampleSize, rng);
+    }
+  }
+
+  return sampledLits;
 }

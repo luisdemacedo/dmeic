@@ -9,14 +9,15 @@ StatusCode PortfolioMO::search() {
   }
 
   for (size_t idx = 0; idx < _portfolio.size(); idx++) {
-    DLOG(stdout, "Answer from solver %zu: %u\n", idx,
+    DLOG(LogCategory::General, stdout, "Answer from solver %zu: %u\n", idx,
          _portfolio[idx]->answerType);
     if (_portfolio[idx]->answerType != _INTERRUPTED_) {
       this->answerType = _portfolio[idx]->answerType;
     }
   }
 
-  DLOG(stdout, "Answer from portfolio: %u\n", this->answerType);
+  DLOG(LogCategory::General, stdout, "Answer from portfolio: %u\n",
+       this->answerType);
 
   printAnswer(this->answerType);
   return this->answerType;

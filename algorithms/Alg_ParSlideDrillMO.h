@@ -20,8 +20,7 @@
 
 namespace openwbo {
 
-enum class PointResult { BudgetExhausted, SAT, UNSAT };
-
+enum class DrillResult { FoundModel, UnsatNoCore, UnsatCore, Budget };
 using conflict_t = vec<Lit>;
 class ParSlideDrillMO : public virtual ParallelMO, public virtual Bounded {
   constexpr static bool polarity = true; // because it is a sat-unsat solver;
@@ -49,8 +48,7 @@ public:
   void search_MO() override;
   bool slide(size_t wid);
   bool drill(size_t wid);
-  PointResult drillFromPoint(size_t wid, const YPoint &yp);
-  PointResult processPoint(size_t wid, const YPoint &yp);
+  DrillResult drillFromPoint(size_t wid, const YPoint &yp);
   // TODO: implement prune and check, as they are unused in the sequential
   // version
   //
@@ -60,8 +58,6 @@ public:
   public:
     YPoint drill_marker;
     // results of slide, and corresponding blocking variables
-    std::map<YPoint, Node> mem{};
-    std::map<Lit, YPoint> slide_map{};
     // points (a)bove lower region of test
   };
 
@@ -72,8 +68,9 @@ protected:
   vec<Lit> explanation; // unsat explanation
   unique_ptr<waiting_list::WaitingListI> waiting_list;
   double runtime{};
-  YPoint drill_marker{};
   YPoint core_marker{};
+  std::map<YPoint, Node> mem{};
+  std::map<Lit, YPoint> slide_map{};
   std::vector<ParSlideDrillMO::SDWorkerState> worker_states;
 };
 

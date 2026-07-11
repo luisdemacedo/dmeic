@@ -59,7 +59,8 @@ public:
 
 protected:
   std::vector<vec<Lit>> grab(int thread_id) override {
-    DLOG(stdout, "[s%d] Grabbing clauses...\n", thread_id);
+    DLOG(LogCategory::ClauseSharing, stdout, "[s%d] Grabbing clauses...\n",
+         thread_id);
     clauses_grabbed[thread_id] += deque.size() - last_seen_by_solver[thread_id];
 
     std::vector<vec<Lit>> result;
@@ -71,13 +72,15 @@ protected:
     if (!result.empty())
       nonempty_grabs[thread_id]++;
     last_seen_by_solver[thread_id] += result.size();
-    DLOG(stdout, "[s%d] Grabbed %zu clauses\n", thread_id, result.size());
+    DLOG(LogCategory::ClauseSharing, stdout, "[s%d] Grabbed %zu clauses\n",
+         thread_id, result.size());
     largest_grab = std::max(largest_grab, result.size());
     return result;
   }
 
   void push(const std::vector<vec<Lit>> &clauses, int thread_id) override {
-    DLOG(stdout, "[s%d] Pushing %zu clauses...\n", thread_id, clauses.size());
+    DLOG(LogCategory::ClauseSharing, stdout, "[s%d] Pushing %zu clauses...\n",
+         thread_id, clauses.size());
     nonempty_pushes[thread_id]++;
     clauses_pushed[thread_id] += clauses.size();
 
@@ -86,10 +89,12 @@ protected:
       clause.copyTo(deque.back());
     }
     last_seen_by_solver[thread_id] += clauses.size();
-    DLOG(stdout, "[s%d] Pushed %zu clauses\n", thread_id, clauses.size());
+    DLOG(LogCategory::ClauseSharing, stdout, "[s%d] Pushed %zu clauses\n",
+         thread_id, clauses.size());
     largest_push = std::max(largest_push, clauses.size());
     most_clauses_in_bag = std::max(most_clauses_in_bag, deque.size());
-    DLOG(stdout, "[s%d] Current deque size is %zu\n", thread_id, deque.size());
+    DLOG(LogCategory::ClauseSharing, stdout,
+         "[s%d] Current deque size is %zu\n", thread_id, deque.size());
   }
 
 protected:
@@ -97,19 +102,23 @@ protected:
   std::deque<vec<Lit>> deque;
   std::vector<size_t> last_seen_by_solver;
   void clean() override {
-    DLOG(stdout, "[s%d] Cleaning...\n", omp_get_thread_num());
+    DLOG(LogCategory::ClauseSharing, stdout, "[s%d] Cleaning...\n",
+         omp_get_thread_num());
     std::size_t min_seen = *std::min_element(last_seen_by_solver.begin(),
                                              last_seen_by_solver.end());
     deque.erase(deque.begin(), deque.begin() + min_seen);
     for (auto &seen : last_seen_by_solver)
       seen -= min_seen;
-    DLOG(stdout, "[s%d] Cleaned up to index %zu, new size is %zu\n",
+    DLOG(LogCategory::ClauseSharing, stdout,
+         "[s%d] Cleaned up to index %zu, new size is %zu\n",
          omp_get_thread_num(), min_seen, deque.size());
-    DLOG(stdout, "[s%d] Updated last_seen_by_solver: ", omp_get_thread_num());
+    DLOG(LogCategory::ClauseSharing, stdout,
+         "[s%d] Updated last_seen_by_solver: ", omp_get_thread_num());
     for (size_t i = 0; i < last_seen_by_solver.size(); i++) {
-      DLOG(stdout, "Thread %zu: %zu ", i, last_seen_by_solver[i]);
+      DLOG(LogCategory::ClauseSharing, stdout, "Thread %zu: %zu ", i,
+           last_seen_by_solver[i]);
     }
-    DLOG(stdout, "\n");
+    DLOG(LogCategory::ClauseSharing, stdout, "\n");
   }
 };
 

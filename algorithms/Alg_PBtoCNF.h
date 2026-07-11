@@ -114,8 +114,8 @@ public:
 
   void requestStopSearch() {
     if (_stopSearch) {
-      DLOG(stdout, "%sSetting pointer stopSearch to true\n",
-           getSolverId().c_str());
+      DLOG(LogCategory::General, stdout,
+           "%sSetting pointer stopSearch to true\n", getSolverId().c_str());
       _stopSearch->store(true);
     }
   }

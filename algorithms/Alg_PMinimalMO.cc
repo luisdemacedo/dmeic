@@ -39,7 +39,7 @@ void PMinimalMO::search_MO() {
       searchPMinimalMO();
       if (getStopSearchFlag()) {
         answerType = _INTERRUPTED_;
-        DLOG(stdout,
+        DLOG(LogCategory::General, stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Search stopped.\n",
              getSolverId().c_str());
@@ -97,7 +97,7 @@ bool PMinimalMO::searchPMinimalMO() {
   assumptions.clear();
 
   if (getStopSearchFlag()) {
-    DLOG(stdout,
+    DLOG(LogCategory::General, stdout,
          "%sstopSearch has been set to true, another thread requested to "
          "stop the search. Stopping search now...\n",
          getSolverId().c_str());
@@ -111,7 +111,7 @@ bool PMinimalMO::searchPMinimalMO() {
     printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
 
     if (getStopSearchFlag()) {
-      DLOG(stdout,
+      DLOG(LogCategory::General, stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Stopping search now...\n",
            getSolverId().c_str());
@@ -123,7 +123,7 @@ bool PMinimalMO::searchPMinimalMO() {
   }
   for (; sat == l_True;) {
     if (getStopSearchFlag()) {
-      DLOG(stdout,
+      DLOG(LogCategory::General, stdout,
            "%sstopSearch has been set to true, another thread requested to "
            "stop the search. Stopping search now...\n",
            getSolverId().c_str());
@@ -132,7 +132,7 @@ bool PMinimalMO::searchPMinimalMO() {
 
     for (; sat == l_True;) {
       if (getStopSearchFlag()) {
-        DLOG(stdout,
+        DLOG(LogCategory::General, stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());
@@ -165,7 +165,7 @@ bool PMinimalMO::searchPMinimalMO() {
       while (sat == l_Undef) {
         printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
         if (getStopSearchFlag()) {
-          DLOG(stdout,
+          DLOG(LogCategory::General, stdout,
                "%sstopSearch has been set to true, another thread requested "
                "stop the search. Stopping search now...\n",
                getSolverId().c_str());
@@ -187,7 +187,7 @@ bool PMinimalMO::searchPMinimalMO() {
     while (sat == l_Undef) {
       printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
       if (getStopSearchFlag()) {
-        DLOG(stdout,
+        DLOG(LogCategory::General, stdout,
              "%sstopSearch has been set to true, another thread requested to "
              "stop the search. Stopping search now...\n",
              getSolverId().c_str());

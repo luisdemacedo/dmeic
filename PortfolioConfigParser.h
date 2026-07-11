@@ -64,15 +64,15 @@ PortfolioConfig parsePortfolioConfig(const std::string &path) {
     }
   }
 
-  DLOG(stdout, "[portfolio-config] parsed:\n");
-  DLOG(stdout, "solvers:\n");
+  DLOG(LogCategory::General, stdout, "[portfolio-config] parsed:\n");
+  DLOG(LogCategory::General, stdout, "solvers:\n");
   for (std::size_t i = 0; i < config.size(); ++i) {
     auto &solver = config[i];
     for (std::unordered_map<std::string, std::string>::const_iterator it =
              solver.begin();
          it != solver.end(); ++it)
-      DLOG(stdout, "solver%zu.%s = %s\n", i + 1, it->first.c_str(),
-           it->second.c_str());
+      DLOG(LogCategory::General, stdout, "solver%zu.%s = %s\n", i + 1,
+           it->first.c_str(), it->second.c_str());
   }
   return config;
 }
