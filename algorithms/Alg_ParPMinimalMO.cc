@@ -42,13 +42,7 @@ void ParPMinimalMO::search_MO() {
     if (std::all_of(resform.get(), resform.get() + workers.size(),
                     std::identity{})) {
       printf("c search\n");
-      findRandomizedInitialSolutions();
-#pragma omp parallel num_threads(workers.size())
-      {
-        size_t wid = omp_get_thread_num();
-        workers[wid].time1stSol = cpuTime() - initialTime;
-        searchParPMinimalMO(wid);
-      }
+      searchFromRandomizedInitialSolutions();
     } else {
       printf("c No more solutions!\n");
     }
@@ -93,7 +87,8 @@ void ParPMinimalMO::search_MO() {
   printAnswer(answerType);
 }
 
-void ParPMinimalMO::findRandomizedInitialSolutions(double sampleFraction) {
+void ParPMinimalMO::searchFromRandomizedInitialSolutions(
+    double sampleFraction) {
   assert(sampleFraction > 0.0 && sampleFraction <= 1.0);
   int nObj = maxsat_formula->nObjFunctions();
   const std::uint32_t baseSeed = std::random_device{}();
@@ -174,12 +169,12 @@ void ParPMinimalMO::findRandomizedInitialSolutions(double sampleFraction) {
              (sat == l_Undef || w.solver->conflict.size() > 0));
 
     assert(sat == l_True);
-    Model m = make_model(w.solver->model);
-    YPoint yp = evalModel(m);
+    w.time1stSol = cpuTime() - initialTime;
     std::osyncstream(std::cout)
         << getSolverId()
         << "c initial solution found (time: " << cpuTime() - initialTime
         << ")\n";
+    searchParPMinimalMO(wid);
   }
 }
 
