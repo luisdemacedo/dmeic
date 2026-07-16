@@ -13,6 +13,7 @@
 
 #include "../MaxSAT.h"
 #include "../waiting_list/waiting_list.h"
+#include "./Alg_ParServer.h"
 #include "./Alg_ParallelMO.h"
 #include "./Alg_ServerMO.h"
 #include "utils/System.h"
@@ -34,7 +35,8 @@ class ParSlideDrillMO : public virtual ParallelMO, public virtual Bounded {
 public:
   ParSlideDrillMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
                   int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
-                  int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
+                  int pb = _PB_SWC_, int pbobjf = _PB_GTE_, size_t nworkers = 2,
+                  bool clausesharing = false,
                   int apmode = encoding::_ap_outvars_, float eps = 1,
                   int searchStrat = 3, bool ascend = false, bool lower = false,
                   int wl_type = 0)
@@ -72,6 +74,27 @@ protected:
   std::map<YPoint, Node> mem{};
   std::map<Lit, YPoint> slide_map{};
   std::vector<ParSlideDrillMO::SDWorkerState> worker_states;
+};
+
+class ParSlideDrillServerMO : public virtual ParallelMOServer,
+                              public virtual ParSlideDrillMO {
+
+public:
+  ParSlideDrillServerMO(int verb = _VERBOSITY_MINIMAL_,
+                        int weight = _WEIGHT_NONE_,
+                        int strategy = _WEIGHT_NONE_,
+                        int enc = _CARD_MTOTALIZER_, int pb = _PB_SWC_,
+                        int pbobjf = _PB_GTE_, size_t nworkers = 2,
+                        bool clausesharing = false,
+                        int apmode = encoding::_ap_outvars_, float eps = 1,
+                        int searchStrat = 3, bool ascend = false,
+                        bool lower = false, int wl_type = 0)
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
+                   clausesharing),
+        ParallelMOServer(verb, weight, strategy, enc, pb, pbobjf),
+        ParSlideDrillMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
+                        clausesharing, apmode, eps, searchStrat, ascend, lower,
+                        wl_type) {}
 };
 
 } // namespace openwbo

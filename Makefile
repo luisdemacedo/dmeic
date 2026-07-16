@@ -48,8 +48,8 @@ CFLAGS     += -DGLUCORED
 DEPDIR     += reducer glucored
 endif
 endif
-ifeq ($(DDEBUG),1)
-CFLAGS     += -DDEBUG
+ifeq ($(DDEBUG_SAMPLING),1)
+CFLAGS     += -DDEBUG_SAMPLING
 endif
 
 # Some solvers do not have a template.mk file any more

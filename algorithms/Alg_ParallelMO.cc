@@ -675,8 +675,8 @@ void ParallelMO::shareSolutions(size_t wid, bool alsoPull) {
 
   for (auto &sol : receivedFront) {
     blockDominatedRegion(wid, sol.yPoint());
-    w.solutions.pushSafe(sol.model());
   }
+  w.solutions.clear();
 }
 
 void ParallelMO::shareClauses(size_t wid) {

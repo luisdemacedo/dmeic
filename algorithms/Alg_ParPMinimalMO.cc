@@ -115,58 +115,65 @@ void ParPMinimalMO::searchFromRandomizedInitialSolutions(
     std::mt19937 rng(seed);
     lbool sat = l_False;
 
-    do { // Randomizing the starting point
-      shareClauses(wid);
-      vec<Lit> core;
-      for (int i = 0; i < w.solver->conflict.size(); i++)
-        core.push(w.solver->conflict[i]);
+    if (!wid) {
+      w.assumptions.clear();
+      do {
+        shareClauses(wid);
+        sat = solve(wid);
+      } while (sat == l_Undef);
+    } else
+      do { // Randomizing the starting point
+        shareClauses(wid);
+        vec<Lit> core;
+        for (int i = 0; i < w.solver->conflict.size(); i++)
+          core.push(w.solver->conflict[i]);
 
-      if (core.size())
-        w.solver->addClause(core);
+        if (core.size())
+          w.solver->addClause(core);
 
-      std::size_t poolSizeBefore = 0;
-      std::size_t poolSizeAfter = 0;
+        std::size_t poolSizeBefore = 0;
+        std::size_t poolSizeAfter = 0;
 
 #pragma omp critical(objective_lit_pools)
-      {
-        for (const auto &pool : objectiveLitPools)
-          poolSizeBefore += pool.size();
+        {
+          for (const auto &pool : objectiveLitPools)
+            poolSizeBefore += pool.size();
 
-        for (int i = 0; i < core.size(); i++) {
-          Lit lit = core[i];
+          for (int i = 0; i < core.size(); i++) {
+            Lit lit = core[i];
 
-          for (const size_t &objIdx : objectivesOfLit[lit.x]) {
-            const size_t pos = LitToObjectivePosition[objIdx].at(lit.x);
-            std::swap(objectiveLitPools[objIdx][pos],
-                      objectiveLitPools[objIdx].back());
-            LitToObjectivePosition[objIdx][objectiveLitPools[objIdx][pos].x] =
-                pos;
-            objectiveLitPools[objIdx].pop_back();
-            LitToObjectivePosition[objIdx].erase(lit.x);
+            for (const size_t &objIdx : objectivesOfLit[lit.x]) {
+              const size_t pos = LitToObjectivePosition[objIdx].at(lit.x);
+              std::swap(objectiveLitPools[objIdx][pos],
+                        objectiveLitPools[objIdx].back());
+              LitToObjectivePosition[objIdx][objectiveLitPools[objIdx][pos].x] =
+                  pos;
+              objectiveLitPools[objIdx].pop_back();
+              LitToObjectivePosition[objIdx].erase(lit.x);
+            }
+            objectivesOfLit.erase(lit.x);
           }
-          objectivesOfLit.erase(lit.x);
+
+          for (const auto &pool : objectiveLitPools)
+            poolSizeAfter += pool.size();
         }
 
-        for (const auto &pool : objectiveLitPools)
-          poolSizeAfter += pool.size();
-      }
+        if (core.size() > 0)
+          DLOG(LogCategory::Sampling, stdout,
+               "%sc shrinking objective lit pools, core size=%d, before=%zu, "
+               "after=%zu, removed=%zu\n",
+               getSolverId().c_str(), core.size(), poolSizeBefore,
+               poolSizeAfter, poolSizeBefore - poolSizeAfter);
 
-      if (core.size() > 0)
-        DLOG(LogCategory::Sampling, stdout,
-             "%sc shrinking objective lit pools, core size=%d, before=%zu, "
-             "after=%zu, removed=%zu\n",
-             getSolverId().c_str(), core.size(), poolSizeBefore, poolSizeAfter,
-             poolSizeBefore - poolSizeAfter);
+        w.assumptions.clear();
+        std::vector<Lit> sampledLits =
+            sampleObjectiveLits(objectiveLitPools, sampleFraction, rng);
 
-      w.assumptions.clear();
-      std::vector<Lit> sampledLits =
-          sampleObjectiveLits(objectiveLitPools, sampleFraction, rng);
+        for (const auto &lit : sampledLits)
+          w.assumptions.push(~lit);
 
-      for (const auto &lit : sampledLits)
-        w.assumptions.push(~lit);
-
-    } while ((sat = solve(wid)) != l_True &&
-             (sat == l_Undef || w.solver->conflict.size() > 0));
+      } while ((sat = solve(wid)) != l_True &&
+               (sat == l_Undef || w.solver->conflict.size() > 0));
 
     assert(sat == l_True);
     w.time1stSol = cpuTime() - initialTime;

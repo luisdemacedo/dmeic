@@ -250,9 +250,10 @@ IntOption
               "27=mo-us_list_pmin), "
               "28=drill), " // undocumented
               "29=portfolio), "
-              "30=parpminimal)."
+              "30=parpminimal),"
+              "31=parsd)."
               "\n",
-              7, IntRange(0, 30));
+              7, IntRange(0, 31));
 
 IntOption partition_strategy("PartMSU3", "partition-strategy",
                              "Partition strategy (0=sequential, "
@@ -806,6 +807,11 @@ MaxSAT *buildSolver(int argc, char **argv) {
   case _ALGORITHM_PARPMINIMAL_:
     S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
                           pb, pbobjf, n_moco_workers, share_clauses);
+    break;
+  case _ALGORITHM_PARSLIDEDRILL_:
+    S = new SlideDrillUnsatSatShuntMO( // TODO:
+        verbosity, weight, partition_strategy, cardinality, pb, pbobjf, apmode,
+        eps, sstrategy, conf_budget, ascend, lower, wl_type);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");
