@@ -28,7 +28,7 @@ DEPDIR     += mtl utils core
 DEPDIR     +=  ../../encodings ../../algorithms ../../graph ../../classifier ../../analysis ../../debug ../../waiting_list
 MROOT      ?= $(PWD)/solvers/$(SOLVERDIR)
 LFLAGS     += -lgmpxx -lgmp -fopenmp 
-CFLAGS     += -Wall -Wno-parentheses -Wno-class-memaccess -std=c++20 -DNSPACE=$(NSPACE) -DSOLVERNAME=$(SOLVERNAME) -DVERSION=$(VERSION) -fopenmp -g -Og -fno-inline
+CFLAGS     += -Wall -Wno-parentheses -Wno-class-memaccess -std=c++20 -DNSPACE=$(NSPACE) -DSOLVERNAME=$(SOLVERNAME) -DVERSION=$(VERSION) -fopenmp -g -Og
 ifeq ($(SANITIZER),asan)
 CFLAGS     += -fsanitize=address
 LFLAGS     += -fsanitize=address
