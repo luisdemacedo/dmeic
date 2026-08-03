@@ -66,6 +66,42 @@ protected:
   int max_size = 0;
   YPoint popped{};
 };
+
+template <typename Container> class SyncedWaitingList : public WaitingListI {
+public:
+  YPoint pop() override {
+    std::lock_guard<std::mutex> lock(mtx);
+    popped = container.pop();
+    return popped;
+  }
+
+  void insert(const YPoint &yp, bool force = false, int note = 0) override {
+    std::lock_guard<std::mutex> lock(mtx);
+    container.insert(yp, force, note);
+  }
+
+  int size() override {
+    std::lock_guard<std::mutex> lock(mtx);
+    return container.size();
+  }
+
+  std::optional<YPoint> try_pop() override {
+    std::lock_guard<std::mutex> lock(mtx);
+    if (container.size() == 0)
+      return std::nullopt;
+    return container.pop();
+  }
+
+  void requeue(const YPoint &yp, int note = 0) override {
+    std::lock_guard<std::mutex> lock(mtx);
+    container.requeue(yp, note);
+  }
+
+private:
+  Container container;
+  std::mutex mtx{};
+};
+
 class Queue : public WaitingListI {
 public:
   Queue() : queue() {};
@@ -79,7 +115,7 @@ public:
     auto a = set.insert(yp);
     if (a.second || force) {
       queue.push(yp);
-      auto sz = size();
+      auto sz = queue.size();
       if (sz > max_size)
         max_size = sz;
     }
@@ -103,6 +139,7 @@ private:
   std::queue<YPoint> queue;
   std::set<YPoint> set;
 };
+
 class Stack : public WaitingListI {
 public:
   Stack() : stack{} {};
@@ -116,7 +153,7 @@ public:
     auto a = set.insert(yp);
     if (a.second || force) {
       stack.push_back(yp);
-      auto sz = size();
+      auto sz = stack.size();
       if (sz > max_size)
         max_size = sz;
     }
@@ -141,61 +178,8 @@ private:
   std::set<YPoint> set;
 };
 
-class SyncedStack : public Stack {
-public:
-  SyncedStack() : Stack() {};
-  YPoint pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Stack::pop();
-  }
-  int size() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Stack::size();
-  }
-  void insert(const YPoint &yp, bool force = false, int note = 0) override {
-    std::lock_guard<std::mutex> lock(mtx);
-    Stack::insert(yp, force, note);
-  }
-  void report() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    Stack::report();
-  }
-  std::optional<YPoint> try_pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Stack::try_pop();
-  }
-
-private:
-  std::mutex mtx{};
-};
-
-class SyncedQueue : public Queue {
-public:
-  SyncedQueue() : Queue() {};
-  YPoint pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Queue::pop();
-  }
-  int size() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Queue::size();
-  }
-  void insert(const YPoint &yp, bool force = false, int note = 0) override {
-    std::lock_guard<std::mutex> lock(mtx);
-    Queue::insert(yp, force, note);
-  }
-  void report() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    Queue::report();
-  }
-  std::optional<YPoint> try_pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return Queue::try_pop();
-  }
-
-private:
-  std::mutex mtx{};
-};
+using SyncedStack = SyncedWaitingList<Stack>;
+using SyncedQueue = SyncedWaitingList<Queue>;
 
 // polarity false: large hv first. polarity true: small hv first
 template <bool lower = false, bool ascend = false>

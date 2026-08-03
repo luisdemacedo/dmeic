@@ -40,7 +40,8 @@ public:
                   int apmode = encoding::_ap_outvars_, float eps = 1,
                   int searchStrat = 3, bool ascend = false, bool lower = false,
                   int wl_type = 0)
-      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf) {
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
+                   clausesharing, apmode, eps, searchStrat) {
     waiting_list = waiting_list::construct(wl_type, lower, ascend);
   }
 
@@ -51,6 +52,7 @@ public:
   bool slide(size_t wid);
   bool drill(size_t wid);
   DrillResult drillFromPoint(size_t wid, const YPoint &yp);
+  void initWorkers() override;
   // TODO: implement prune and check, as they are unused in the sequential
   // version
   //
@@ -58,7 +60,7 @@ public:
   // bool check(YPoint yp);
   class SDWorkerState {
   public:
-    YPoint drill_marker;
+    YPoint drill_marker{};
     // results of slide, and corresponding blocking variables
     // points (a)bove lower region of test
   };
@@ -90,11 +92,20 @@ public:
                         int searchStrat = 3, bool ascend = false,
                         bool lower = false, int wl_type = 0)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
-                   clausesharing),
-        ParallelMOServer(verb, weight, strategy, enc, pb, pbobjf),
+                   clausesharing, apmode, eps, searchStrat),
+        ParallelMOServer(verb, weight, strategy, enc, pb, pbobjf, nworkers,
+                         clausesharing),
         ParSlideDrillMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
                         clausesharing, apmode, eps, searchStrat, ascend, lower,
                         wl_type) {}
+  void increment() override;
+  void checkSols() override {};
+  StatusCode searchAgain() override;
+  void bootstrap(const Solution &) override {};
+  void initWorkers() override {
+    ParSlideDrillMO::initWorkers();
+    waiting_list->insert(pareto::max);
+  };
 };
 
 } // namespace openwbo

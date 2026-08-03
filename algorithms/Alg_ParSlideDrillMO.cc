@@ -19,8 +19,9 @@ void ParSlideDrillMO::search_MO() {
       yp.push_back(getFormula()->getUB(i) - getFormula()->getLB(i));
     waiting_list->insert(yp);
     searchBoundHonerMO();
-    consolidateSolution();
-    answerType = _OPTIMUM_;
+#pragma omp parallel
+    consolidateSolution(omp_get_thread_num());
+    answerType = openwbo::_OPTIMUM_;
   } else
     answerType = openwbo::_UNSATISFIABLE_;
   printAnswer(answerType);
@@ -29,6 +30,7 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
   // drill
   std::atomic<int> active{0};
   std::atomic<bool> stop{false};
+  printf("c ParSlideDrillMO::searchBoundHonerMO: start drilling\n");
 #pragma omp parallel num_threads(workers.size())
   {
     size_t wid = omp_get_thread_num();
@@ -54,7 +56,12 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
       } else if (result == DrillResult::Budget) {
         waiting_list->requeue(maybe_yp.value(), 1);
       }
+
+      shareSolutions(wid, true);
+
       active.fetch_sub(1);
+      printf("%sSolutions size: %zu\n", getSolverId().c_str(),
+             sharedSolutions->getSolutions().size());
     }
   }
   answerType = _OPTIMUM_;
@@ -135,22 +142,24 @@ bool ParSlideDrillMO::slide(size_t wid) {
       YPoint yp = evalModel(m);
       Lit l;
       // create slide variable for newly found solution
-#pragma omp critical(slide_map)
+#pragma omp critical(mem)
       {
 
         std::vector<Lit> lits;
         lits.resize(workers.size());
         for (size_t i = 0; i < workers.size(); i++)
           lits[i] = mkLit(workers[i].solver->newVar());
-        assert(std::all_of(lits.begin(), lits.end(),
-                           [&](Lit l) { return l.x != lits.front().x; }));
+        if (workers.size() > 1)
+          assert(std::all_of(lits.begin(), lits.end(),
+                             [&](Lit l) { return l.x == lits.front().x; }));
         l = lits[wid];
         n->deps.push_back(l);
         slide_map[l] = yp;
       }
       waiting_list->insert(yp);
-      // printf("c o ");
-      // std::cout << sol << std::endl;
+      std::ostringstream oss;
+      oss << yp;
+      std::osyncstream(std::cout) << "c o " << oss.str() << "\n";
       runtime = cpuTime();
       printf("c new suboptimal solution (time: %.3f)\n", runtime - initialTime);
       // temporarily avoid region dominating last point
@@ -162,6 +171,7 @@ bool ParSlideDrillMO::slide(size_t wid) {
       w.assumptions.push(~l);
     }
   } while ((sat = solve(wid)) == l_True);
+
   // fix temporary variables used during slide, which are listed
   // in the assumptions.
   if (sat == l_Undef) {
@@ -197,6 +207,36 @@ void ParSlideDrillMO::asssumeIncomparableRegion(size_t wid, const YPoint &yp,
   }
   clause.push(l);
   w.solver->addClause(clause);
+}
+
+void ParSlideDrillMO::initWorkers() {
+  ParallelMO::initWorkers();
+  worker_states.resize(workers.size());
+  for (size_t wid = 0; wid < workers.size(); wid++) {
+    worker_states[wid].drill_marker.clear();
+  }
+}
+
+void ParSlideDrillServerMO::increment() {
+  if (answerType == openwbo::_BUDGET_)
+    answerType = openwbo::_UNKNOWN_;
+}
+
+StatusCode ParSlideDrillServerMO::searchAgain() {
+  printf("c ParSlideDrillServerMO::searchAgain\n");
+#pragma omp parallel for
+  for (size_t wid = 0; wid < workers.size(); wid++)
+    workers[wid].assumptions.clear();
+
+  printf("c ParSlideDrillServerMO::searchAgain: clear assumptions\n");
+  answerType = openwbo::_UNKNOWN_;
+  searchBoundHonerMO();
+  if (answerType != openwbo::_BUDGET_)
+    if (sharedSolutions->empty())
+      answerType = openwbo::_UNSATISFIABLE_;
+    else
+      answerType = openwbo::_OPTIMUM_;
+  return answerType;
 }
 
 } // namespace openwbo

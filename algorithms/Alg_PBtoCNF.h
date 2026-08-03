@@ -72,7 +72,6 @@ public:
     encoder.setPBEncoding(pbobjf);
     answerType = _UNKNOWN_;
     nreencodes = 0;
-    _nb_encoded_vars_initial = 0;
   }
   // wrapper of init and buildSolverMO
   virtual void build();
@@ -186,7 +185,7 @@ public:
   void setMyOutputFiles(const char *file) override;
 
   void setClauseSharingVarCutoff(size_t cutoff) {
-    _nb_encoded_vars_initial = cutoff;
+    clause_sharing_var_cutoff = cutoff;
   }
 
   void applyBlockDominatedRegion(
@@ -382,7 +381,7 @@ protected:
   int nreencodes;
 
   // Parallel MOCO-support
-  size_t _nb_encoded_vars_initial;
+  size_t clause_sharing_var_cutoff = -1; // SIZE_MAX
   std::shared_ptr<std::atomic<bool>> _stopSearch;
   bool _shareClauses = false;
   bool _shareSolutions = false;

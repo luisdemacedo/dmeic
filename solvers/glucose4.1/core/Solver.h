@@ -62,6 +62,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mtl/Heap.h"
 #include "omp.h"
 #include "utils/Options.h"
+#include <limits>
 #include <vector>
 
 namespace Glucose {
@@ -299,7 +300,8 @@ public:
 
   // Parallel MOCO-related functions. TODO: Check
   void addLearntClauses(std::vector<vec<Lit>> &clauses);
-  std::vector<vec<Lit>> getLearntClauses(size_t var_id_cutoff);
+  std::vector<vec<Lit>>
+  getLearntClauses(size_t var_id_cutoff = std::numeric_limits<size_t>::max());
 
 protected:
   long curRestart;

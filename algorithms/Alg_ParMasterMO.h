@@ -23,17 +23,20 @@ public:
 
 class ParallelMasterMO : public virtual ParallelMO, public virtual ParMasterMO {
 public:
-  bool buildWorkFormula() override;
-  virtual void build() override = 0;
+  virtual bool buildWorkFormula() {
+    updateMOFormulation(MASTER_WORKER_ID);
+    return true;
+  };
+  virtual void build() = 0;
   void search_MO() override {
     build();
-    if (firstSolution(0)) {
+    if (firstSolution(MASTER_WORKER_ID)) {
       buildWorkFormula();
       auto res = searchMasterMO();
 
-      consolidateSolution();
+      consolidateSolution(MASTER_WORKER_ID);
       if (res == _OPTIMUM_ || res == _UNSATISFIABLE_)
-        if (solution().size() == 0)
+        if (workers[MASTER_WORKER_ID].solutions.size() == 0)
           answerType = _UNSATISFIABLE_;
         else
           answerType = _OPTIMUM_;
@@ -74,6 +77,10 @@ public:
   // void blockDominatedRegion(const YPoint &yp) override {
   //   optim->applyBlockDominatedRegion(yp);
   // }
+  //
+
+protected:
+  static constexpr std::size_t MASTER_WORKER_ID = 0;
 };
 } // namespace openwbo
 #endif

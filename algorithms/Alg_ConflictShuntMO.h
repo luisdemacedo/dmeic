@@ -1,7 +1,9 @@
 #ifndef ALG_CONFLICTSHUNTMO_H
 #define ALG_CONFLICTSHUNTMO_H
 #include "./Alg_PMinimalServerMO.h"
+#include "./Alg_ParMasterMO.h"
 #include "./Alg_ParServer.h"
+#include "./Alg_ParSlideDrillMO.h"
 #include "./Alg_SlideDrillMO.h"
 #include "Alg_MasterMO.h"
 #include "Alg_ServerMO.h"
@@ -41,33 +43,30 @@ protected:
   shared_ptr<PBtoCNFServerMO> lower{};
 };
 
-// class ParConflictShuntMO : public PBtoCNFMasterMO {
-//
-// public:
-//   ParConflictShuntMO(int verb = _VERBOSITY_MINIMAL_, int weight =
-//   _WEIGHT_NONE_,
-//                      int strategy = _WEIGHT_NONE_, int enc =
-//                      _CARD_MTOTALIZER_, int pb = _PB_SWC_, int pbobjf =
-//                      _PB_GTE_, int apmode = encoding::_ap_outvars_, float eps
-//                      = 1, int searchStrat = 3, int conf_budget = INT32_MAX,
-//                      int wl_type = 0)
-//       : PBtoCNF(verb, weight, strategy, enc, pb, pbobjf) {
-//     setConflictLimit(conf_budget);
-//   }
-//   void printAnswer(int type) override;
-//   void search_MO() override;
-//   bool buildWorkFormula() override;
-//   bool setup_approx() override;
-//   bool incorporate_approx() override;
-//   void build() override;
-//   void consolidateSolution() override;
-//   void initializeOptimizer(Solver *, MaxSATFormula *) override;
-//   StatusCode searchConflictShuntMO();
-//
-// protected:
-//   shared_ptr<ParallelMOServer> upper{};
-//   shared_ptr<ParallelMOServer> lower{};
-// };
+class ParConflictShuntMO : public ParallelMasterMO {
+
+public:
+  ParConflictShuntMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
+                     int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
+                     int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
+                     size_t nWorkers = 2, bool clausesharing = false,
+                     int apmode = encoding::_ap_outvars_, float eps = 1,
+                     int searchStrat = 3, int conf_budget = INT32_MAX,
+                     int wl_type = 0)
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
+                   clausesharing, apmode, eps, searchStrat) {}
+  void printAnswer(int type) override;
+  void search_MO() override;
+  bool setup_approx() override;
+  bool incorporate_approx() override;
+  void build() override;
+  void initializeOptimizer(Solver *, MaxSATFormula *) override;
+  StatusCode searchConflictShuntMO();
+
+protected:
+  shared_ptr<ParallelMOServer> upper{};
+  shared_ptr<ParallelMOServer> lower{};
+};
 
 class SlideDrillShuntMO : public ConflictShuntMO {
 public:
@@ -213,27 +212,27 @@ public:
   }
 };
 
-// class ParSlideDrillShuntMO : public ParConflictShuntMO {
-// public:
-//   ParSlideDrillShuntMO(int verb = _VERBOSITY_MINIMAL_,
-//                        int weight = _WEIGHT_NONE_, int strategy =
-//                        _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_, int pb =
-//                        _PB_SWC_, int pbobjf = _PB_GTE_, size_t nworkers = 2,
-//                        bool clausesharing = false,
-//                        int apmode = encoding::_ap_outvars_, float eps = 1,
-//                        int searchStrat = 3, int conf_budget = INT32_MAX,
-//                        bool ascend = false, bool lower = false, int wl_type =
-//                        0)
-//       : PBtoCNF(verb, weight, strategy, enc, pb, pbobjf),
-//         ParConflictShuntMO(verb, weight, strategy, enc, pb, pbobjf, apmode,
-//         eps,
-//                            searchStrat, conf_budget) {
-//     upper = make_shared<ParSlideDrillServerMO>(
-//         verb, weight, strategy, enc, pb, pbobjf, nworkers, clausesharing,
-//         apmode, eps, searchStrat, ascend, lower, wl_type);
-//
-//     optim = upper.get();
-//   }
-// };
+class ParSlideDrillShuntMO : public ParConflictShuntMO {
+public:
+  ParSlideDrillShuntMO(int verb = _VERBOSITY_MINIMAL_,
+                       int weight = _WEIGHT_NONE_, int strategy = _WEIGHT_NONE_,
+                       int enc = _CARD_MTOTALIZER_, int pb = _PB_SWC_,
+                       int pbobjf = _PB_GTE_, size_t nworkers = 2,
+                       bool clausesharing = false,
+                       int apmode = encoding::_ap_outvars_, float eps = 1,
+                       int searchStrat = 3, int conf_budget = INT32_MAX,
+                       bool ascend = false, bool lower = false, int wl_type = 0)
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, 1, clausesharing,
+                   apmode, eps, searchStrat),
+        ParConflictShuntMO(verb, weight, strategy, enc, pb, pbobjf, 1,
+                           clausesharing, apmode, eps, searchStrat, conf_budget,
+                           wl_type) {
+    upper = make_shared<ParSlideDrillServerMO>(
+        verb, weight, strategy, enc, pb, pbobjf, nworkers, clausesharing,
+        apmode, eps, searchStrat, ascend, lower, wl_type);
+
+    optim = upper.get();
+  }
+};
 
 #endif

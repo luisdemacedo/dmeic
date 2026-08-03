@@ -1494,7 +1494,7 @@ Solver *PBtoCNF::buildSolverMO() {
     fubs[di] = 0;
   getMaxSATFormula()->sync_first(S);
   encoder.kpa_fixed_vars(getMaxSATFormula()->fixed_vars());
-  _nb_encoded_vars_initial = S->nVars();
+  clause_sharing_var_cutoff = S->nVars() - 1;
   return S;
 }
 
@@ -1552,6 +1552,7 @@ bool PBtoCNF::updateMOFormulation() {
                       // seja refeito
   double total_time = cpuTime();
   printf("c encode time: %f\n\n", total_time - before_enc);
+  clause_sharing_var_cutoff = solver->nVars() - 1;
 
   return true;
 }
@@ -1740,11 +1741,19 @@ void PBtoCNF::shareClauses() {
     return;
 
   std::vector<vec<Lit>> clauses =
-      solver->getLearntClauses(_nb_encoded_vars_initial - 1); // 0-indexed
+      solver->getLearntClauses(clause_sharing_var_cutoff);
   std::vector<vec<Lit>> filteredClauses = sharingHeuristic->filter(clauses);
   std::vector<vec<Lit>> receivedClauses =
       sharedLearntClauses->syncSharedClauses(clauses.size(), filteredClauses,
                                              omp_get_thread_num());
+
+  std::erase_if(receivedClauses, [&](const vec<Lit> &clause) {
+    for (size_t i = 0; i < clause.size(); i++)
+      if (var(clause[i]) > clause_sharing_var_cutoff)
+        return true;
+    return false;
+  });
+
   solver->addLearntClauses(receivedClauses);
 }
 

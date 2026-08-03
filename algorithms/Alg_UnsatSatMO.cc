@@ -143,6 +143,8 @@ newHarvest:
       }
     }
   }
+  shareClauses();
+  shareSolutions(getShareSolutions());
   if (extendUL(ul))
     goto newHarvest;
   return true;

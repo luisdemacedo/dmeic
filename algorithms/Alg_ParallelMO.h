@@ -30,9 +30,12 @@
 
 #define MAXDIM 50
 
+class ParConflictShuntMO;
+
 namespace openwbo {
 
 class ParallelMO : public MOCO {
+  friend class ::ParConflictShuntMO;
 
 public:
   using rootLits_t = std::shared_ptr<rootLits::RootLitsInt>;
@@ -69,6 +72,7 @@ public:
   }
   void printAnswer(int type) override;
   void printSolutions();
+  void consolidateSolution(size_t wid);
 
 protected:
   class Worker {
@@ -107,7 +111,7 @@ protected:
 
   std::vector<Worker> workers;
 
-  void initWorkers() {
+  virtual void initWorkers() {
     for (auto &worker : workers) {
       worker.encoder.setCardEncoding(cardinality_encoding);
       worker.encoder.setPBEncoding(pb_objective_encoding);
@@ -131,6 +135,12 @@ protected:
   }
 
   void buildSolversMO();
+  void setConflictLimit(int limit) {
+    conflict_limit = limit;
+#pragma omp parallel for
+    for (size_t wid = 0; wid < workers.size(); wid++)
+      workers[wid].nConflicts = limit;
+  }
   lbool solve(size_t worker_id);
   void updateMOEncoding(size_t worker_id);
 

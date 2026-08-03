@@ -169,6 +169,12 @@ void ParallelMO::printAnswer(int type) {
   }
 }
 
+void ParallelMO::consolidateSolution(size_t wid) {
+  Worker &w = workers[wid];
+  if (w.first.model().size())
+    sharedSolutions->pushSolutions({w.first}, wid);
+}
+
 void ParallelMO::printSolutions() {
   std::ostream &f = std::cout;
   std::ofstream file;

@@ -97,6 +97,14 @@ public:
     }
     return old_cf;
   }
+
+  int ConflictLimit() override { return conflict_limit; }
+
+  void checkLower() override {};
+
+  void checkSols() override {
+    // TODO: implement
+  };
 };
 } // namespace openwbo
 #endif

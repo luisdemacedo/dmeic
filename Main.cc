@@ -350,8 +350,8 @@ IntOption conf_core("conflict budget for core", "conf_core",
                     -1, IntRange(-1, 100000));
 IntOption wl_type("waiting list type", "wl_type",
                   "Implementation of waiting list 0-stack, 1-queue, "
-                  "2-priority_queue, 3-list.\n",
-                  0, IntRange(0, 3));
+                  "2-priority_queue, 3-list, 4-syncedstack, 5-syncedqueue.\n",
+                  0, IntRange(0, 5));
 BoolOption lower("hv polarity", "lower", "Use HV below or above.\n", false);
 BoolOption block_below(
     "block solutions below", "block_below",
@@ -809,9 +809,10 @@ MaxSAT *buildSolver(int argc, char **argv) {
                           pb, pbobjf, n_moco_workers, share_clauses);
     break;
   case _ALGORITHM_PARSLIDEDRILL_:
-    S = new SlideDrillUnsatSatShuntMO( // TODO:
-        verbosity, weight, partition_strategy, cardinality, pb, pbobjf, apmode,
-        eps, sstrategy, conf_budget, ascend, lower, wl_type);
+    S = new ParSlideDrillShuntMO( // TODO:
+        verbosity, weight, partition_strategy, cardinality, pb, pbobjf,
+        n_moco_workers, share_clauses, apmode, eps, sstrategy, conf_budget,
+        ascend, lower, wl_type);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");
