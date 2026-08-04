@@ -60,7 +60,7 @@ public:
 
   StatusCode search() override;
   virtual void search_MO() = 0;
-  void printStats();
+  virtual void printStats();
   bool updateMOFormulationIfSAT(size_t wid);
   bool updateMOFormulation(size_t wid);
   void init();
@@ -70,9 +70,18 @@ public:
   std::string getSolverId() override {
     return "[s" + std::to_string(omp_get_thread_num()) + "] ";
   }
+  size_t nWorkers() const { return workers.size(); }
   void printAnswer(int type) override;
   void printSolutions();
   void consolidateSolution(size_t wid);
+  void setSharedSolutions(
+      std::shared_ptr<solutionsharing::ISharedSolutionsSet> archive) {
+    sharedSolutions = std::move(archive);
+  }
+
+  std::shared_ptr<solutionsharing::ISharedSolutionsSet> getSharedSolutions() {
+    return sharedSolutions;
+  }
 
 protected:
   class Worker {
@@ -94,7 +103,6 @@ protected:
 
     Solution::OneSolution first{};
     Solution solutions{nullptr};
-    size_t _nb_encoded_vars_initial = 0;
     std::unique_ptr<clausesharing::IClauseSharingHeuristic> sharingHeuristic =
         std::make_unique<clausesharing::SizeHeuristic>();
 
@@ -107,6 +115,7 @@ protected:
     int nbReencodes = 0;
     double time1stSol = 0;
     double initialTime = 0;
+    size_t clause_sharing_var_cutoff = -1;
   };
 
   std::vector<Worker> workers;
@@ -123,7 +132,7 @@ protected:
       worker.solutions = Solution(this);
     }
     sharedSolutions =
-        make_unique<solutionsharing::SharedSolutionsArchive>(workers.size());
+        make_shared<solutionsharing::SharedSolutionsArchive>(workers.size());
     sharedLearntClauses =
         make_unique<clausesharing::DequeSharedClausesBag>(workers.size());
   }
@@ -188,7 +197,7 @@ protected:
 
   StatusCode answerType = _UNKNOWN_;
 
-  std::unique_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
+  std::shared_ptr<solutionsharing::ISharedSolutionsSet> sharedSolutions;
   bool _shareClauses;
   std::unique_ptr<clausesharing::ISharedClausesBag> sharedLearntClauses;
 };

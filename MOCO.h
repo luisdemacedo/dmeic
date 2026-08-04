@@ -150,7 +150,7 @@ public:
   remove(const typename container_t::iterator it) {
     return mods.erase(it);
   }
-  size_t size() { return mods.size(); };
+  size_t size() const { return mods.size(); };
   shared_ptr<MOCOFormula> maxsat_formula();
   void report();
 };

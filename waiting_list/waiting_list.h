@@ -15,8 +15,6 @@ enum class Types {
   Queue = 1,
   PriorityQueue = 2,
   List = 3,
-  SyncedStack = 4,
-  SyncedQueue = 5,
 };
 
 template <bool lower = true, bool ascend = !lower>
@@ -65,41 +63,6 @@ public:
 protected:
   int max_size = 0;
   YPoint popped{};
-};
-
-template <typename Container> class SyncedWaitingList : public WaitingListI {
-public:
-  YPoint pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    popped = container.pop();
-    return popped;
-  }
-
-  void insert(const YPoint &yp, bool force = false, int note = 0) override {
-    std::lock_guard<std::mutex> lock(mtx);
-    container.insert(yp, force, note);
-  }
-
-  int size() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    return container.size();
-  }
-
-  std::optional<YPoint> try_pop() override {
-    std::lock_guard<std::mutex> lock(mtx);
-    if (container.size() == 0)
-      return std::nullopt;
-    return container.pop();
-  }
-
-  void requeue(const YPoint &yp, int note = 0) override {
-    std::lock_guard<std::mutex> lock(mtx);
-    container.requeue(yp, note);
-  }
-
-private:
-  Container container;
-  std::mutex mtx{};
 };
 
 class Queue : public WaitingListI {
@@ -177,9 +140,6 @@ private:
   std::vector<YPoint> stack;
   std::set<YPoint> set;
 };
-
-using SyncedStack = SyncedWaitingList<Stack>;
-using SyncedQueue = SyncedWaitingList<Queue>;
 
 // polarity false: large hv first. polarity true: small hv first
 template <bool lower = false, bool ascend = false>

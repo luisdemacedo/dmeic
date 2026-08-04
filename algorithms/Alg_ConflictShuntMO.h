@@ -54,8 +54,11 @@ public:
                      int searchStrat = 3, int conf_budget = INT32_MAX,
                      int wl_type = 0)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
-                   clausesharing, apmode, eps, searchStrat) {}
+                   clausesharing, apmode, eps, searchStrat) {
+    setConflictLimit(conf_budget);
+  }
   void printAnswer(int type) override;
+  void printStats() override;
   void search_MO() override;
   bool setup_approx() override;
   bool incorporate_approx() override;

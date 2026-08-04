@@ -331,7 +331,7 @@ void ParallelMO::buildSolversMO() {
       if (w.solver->value(i) != l_Undef)
         fixedVars.insert(mkLit(i, true));
     w.encoder.kpa_fixed_vars(fixedVars);
-    w._nb_encoded_vars_initial = w.solver->nVars();
+    w.clause_sharing_var_cutoff = w.solver->nVars() - 1;
   }
 }
 
@@ -525,6 +525,7 @@ bool ParallelMO::updateMOFormulation(size_t wid) {
       wid); // aqui é esquecido o encoding anterior, caso seja refeito
   double total_time = cpuTime();
   printf("c encode time: %f\n", total_time - before_enc);
+  w.clause_sharing_var_cutoff = w.solver->nVars() - 1;
 
   return true;
 }
@@ -690,7 +691,8 @@ void ParallelMO::shareClauses(size_t wid) {
     return;
 
   Worker &w = workers[wid];
-  std::vector<vec<Lit>> clauses = w.solver->getLearntClauses(-1); // 0-indexed
+  std::vector<vec<Lit>> clauses =
+      w.solver->getLearntClauses(w.clause_sharing_var_cutoff); // 0-indexed
   std::vector<vec<Lit>> filteredClauses = w.sharingHeuristic->filter(clauses);
   std::vector<vec<Lit>> receivedClauses =
       sharedLearntClauses->syncSharedClauses(clauses.size(), filteredClauses,

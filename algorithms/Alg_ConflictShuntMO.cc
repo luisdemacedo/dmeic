@@ -166,7 +166,13 @@ void ParConflictShuntMO::initializeOptimizer(Solver *s, MaxSATFormula *m) {
   if (upper != NULL) {
     upper->setFormula(getFormula());
     upper->initWorkers();
+    setSharedSolutions(upper->getSharedSolutions());
     upper->buildSolversMO();
+#pragma omp parallel num_threads(upper->nWorkers())
+    {
+      size_t wid = omp_get_thread_num();
+      upper->updateMOFormulation(wid);
+    }
     upper->setConflictLimit(conflict_limit);
   }
   // if (lower != NULL) {
@@ -263,9 +269,14 @@ void ParConflictShuntMO::search_MO() {
 }
 
 void ParConflictShuntMO::printAnswer(int answerType) {
-  if (lower)
-    lower->printAnswer(0);
-  if (upper)
-    upper->printAnswer(0);
   ParallelMO::printAnswer(answerType);
+}
+
+void ParConflictShuntMO::printStats() {
+  if (upper)
+    upper->printStats();
+  else if (lower)
+    lower->printStats();
+  else
+    ParallelMO::printStats();
 }

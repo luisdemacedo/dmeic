@@ -22,6 +22,7 @@
 namespace openwbo {
 
 enum class DrillResult { FoundModel, UnsatNoCore, UnsatCore, Budget };
+enum class SlideResult { Done, Budget };
 using conflict_t = vec<Lit>;
 class ParSlideDrillMO : public virtual ParallelMO, public virtual Bounded {
   constexpr static bool polarity = true; // because it is a sat-unsat solver;
@@ -43,13 +44,16 @@ public:
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nworkers,
                    clausesharing, apmode, eps, searchStrat) {
     waiting_list = waiting_list::construct(wl_type, lower, ascend);
+    this->wl_type = static_cast<waiting_list::Types>(wl_type);
+    this->lower = lower;
+    this->ascend = ascend;
   }
 
   ~ParSlideDrillMO() {}
 
   bool searchBoundHonerMO();
   void search_MO() override;
-  bool slide(size_t wid);
+  SlideResult slide(size_t wid);
   bool drill(size_t wid);
   DrillResult drillFromPoint(size_t wid, const YPoint &yp);
   void initWorkers() override;
@@ -62,7 +66,10 @@ public:
   public:
     YPoint drill_marker{};
     // results of slide, and corresponding blocking variables
+    std::map<YPoint, Node> mem{};
+    std::map<Lit, YPoint> slide_map{};
     // points (a)bove lower region of test
+    std::unique_ptr<waiting_list::WaitingListI> local_list;
   };
 
 protected:
@@ -73,9 +80,10 @@ protected:
   unique_ptr<waiting_list::WaitingListI> waiting_list;
   double runtime{};
   YPoint core_marker{};
-  std::map<YPoint, Node> mem{};
-  std::map<Lit, YPoint> slide_map{};
   std::vector<ParSlideDrillMO::SDWorkerState> worker_states;
+  waiting_list::Types wl_type{};
+  bool lower{};
+  bool ascend{};
 };
 
 class ParSlideDrillServerMO : public virtual ParallelMOServer,
@@ -101,7 +109,7 @@ public:
   void increment() override;
   void checkSols() override {};
   StatusCode searchAgain() override;
-  void bootstrap(const Solution &) override {};
+  void bootstrap(const Solution &sol) override;
   void initWorkers() override {
     ParSlideDrillMO::initWorkers();
     waiting_list->insert(pareto::max);

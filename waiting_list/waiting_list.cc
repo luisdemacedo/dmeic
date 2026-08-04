@@ -31,11 +31,6 @@ unique_ptr<WaitingListI> construct(int wl_type, bool lower, bool ascend) {
     else
       return make_unique<PriorityQueue<false, false>>();
     break;
-  case Types::SyncedStack:
-    return make_unique<SyncedStack>();
-    break;
-  case Types::SyncedQueue:
-    return make_unique<SyncedQueue>();
   }
 
   return NULL;
