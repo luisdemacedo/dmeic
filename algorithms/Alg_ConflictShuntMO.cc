@@ -186,6 +186,7 @@ void ParConflictShuntMO::initializeOptimizer(Solver *s, MaxSATFormula *m) {
 }
 
 void ParConflictShuntMO::build() {
+  init();
   ParallelMO::initWorkers();
   nbMCS = 0;
   answerType = openwbo::_UNKNOWN_;
