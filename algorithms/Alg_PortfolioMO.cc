@@ -83,12 +83,16 @@ void PortfolioMO::printAnswer(int type) {
 
 void PortfolioMO::printSolutions() {
   std::ostream &f = std::cout;
-  std::ofstream file;
-  auto sols = sharedSolutions->getSolutions();
+  std::ofstream modelsFile;
+  std::ofstream objectivesFile;
+  std::vector<std::pair<size_t, YPoint>> points;
   if (print_model) {
-    file.open(effsols_file);
+    auto sols = sharedSolutions->getSolutions();
+    points.reserve(sols.size());
+
+    modelsFile.open(effsols_file);
     std::ostream &out =
-        (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+        (print_my_output) ? static_cast<std::ostream &>(modelsFile) : std::cout;
     // Models
     for (auto &[t_id, sol] : sols) {
       Model m = sol.model();
@@ -105,20 +109,23 @@ void PortfolioMO::printSolutions() {
         }
       }
       std::osyncstream(out) << line << "\n";
+      points.emplace_back(t_id, sol.yPoint());
     }
+  } else {
+    points = sharedSolutions->getSolutionPoints();
   }
   std::osyncstream(std::cout)
-      << "c " << sols.size() << " (efficient) solutions" << "\n";
+      << "c " << points.size() << " (efficient) solutions" << "\n";
   std::cout << "c ------- " << std::endl;
   std::cout << "c pts of transformed prob" << std::endl;
-  for (auto &[t_id, sol] : sols) {
+  for (auto &[t_id, yp] : points) {
     std::string line = "c [s" + std::to_string(t_id) + "] pt";
     for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
-      line += " " + std::to_string(sol.yPoint()[i]);
+      line += " " + std::to_string(yp[i]);
     std::osyncstream(f) << line << "\n";
   }
   std::cout << "c ------- " << std::endl;
-  std::osyncstream(std::cout) << "c " << sols.size() << " points T" << "\n";
+  std::osyncstream(std::cout) << "c " << points.size() << " points T" << "\n";
   std::cout << "c ------- " << std::endl;
   std::cout << "c lower bound set of transformed prob" << std::endl;
   for (size_t i = 0; i < LBset.size(); i++) {
@@ -133,19 +140,19 @@ void PortfolioMO::printSolutions() {
 
   // TODO: LBSet to file
 
-  file.open(objv_file);
+  objectivesFile.open(objv_file);
   std::ostream &out =
-      (print_my_output) ? static_cast<std::ostream &>(file) : std::cout;
+      (print_my_output) ? static_cast<std::ostream &>(objectivesFile) : std::cout;
 
-  for (auto &[t_id, sol] : sols) {
+  for (auto &[t_id, yp] : points) {
     std::string line = "o [s" + std::to_string(t_id) + "]";
     for (int i = 0; i < maxsat_formula->nObjFunctions(); i++)
-      line += " " + std::to_string((int64_t)sol.yPoint()[i] +
+      line += " " + std::to_string((int64_t)yp[i] +
                                    getFormula()->getObjFunction(i)->_const);
     std::osyncstream(out) << line << "\n";
   }
   std::osyncstream(std::cout)
-      << "c " << sols.size() << " nondominated points" << "\n";
+      << "c " << points.size() << " nondominated points" << "\n";
   std::string line = "c _consts:";
   for (size_t i = 0; i < getFormula()->nObjFunctions(); i++)
     line += " " + std::to_string(getFormula()->getObjFunction(i)->_const);

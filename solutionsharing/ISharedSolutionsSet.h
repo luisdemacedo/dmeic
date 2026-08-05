@@ -33,6 +33,9 @@ public:
   virtual std::vector<std::pair<size_t, openwbo::Solution::OneSolution>>
   getSolutions() = 0;
 
+  virtual std::vector<std::pair<size_t, openwbo::YPoint>>
+  getSolutionPoints() = 0;
+
   virtual bool empty() const = 0;
 
   std::size_t getSolutionsPushed(int thread_id) const {

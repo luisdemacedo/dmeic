@@ -179,6 +179,16 @@ public:
     return result;
   }
 
+  virtual std::vector<std::pair<size_t, openwbo::YPoint>>
+  getSolutionPoints() override {
+    std::vector<std::pair<size_t, openwbo::YPoint>> result;
+    // Ignoring lock acquisition
+    for (auto &tsSol : sharedSolutions)
+      result.push_back(
+          std::make_pair(tsSol.added_by_thread, tsSol.sol.yPoint()));
+    return result;
+  }
+
   bool empty() const override {
     std::scoped_lock lock(mutex);
     return sharedSolutions.empty();

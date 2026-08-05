@@ -239,6 +239,51 @@ public:
     return result;
   }
 
+  virtual std::vector<std::pair<size_t, openwbo::YPoint>>
+  getSolutionPoints() override {
+    std::vector<std::pair<size_t, openwbo::YPoint>> result;
+    size_t n = published.load(std::memory_order_acquire);
+    bool overflow = archiveOverflow.load(std::memory_order_acquire);
+
+    if (overflow) {
+      std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+      if (lock.owns_lock()) {
+        DLOG(LogCategory::SolutionSharing, stdout,
+             "[shared-solutions] getSolutions: overflow path, acquired lock; "
+             "scanning full archive\n");
+        for (auto &entry : archive)
+          if (!entry.dominated.load(std::memory_order_acquire))
+            result.push_back(
+                std::make_pair(entry.added_by_thread, entry.sol.yPoint()));
+
+        DLOG(LogCategory::SolutionSharing, stdout,
+             "[shared-solutions] getSolutions: full archive result=%zu\n",
+             result.size());
+        return result;
+      } else {
+        DLOG(
+            LogCategory::SolutionSharing, stdout,
+            "[shared-solutions] getSolutions: overflow path, lock unavailable; "
+            "falling back to published prefix, output may be incomplete\n");
+        for (size_t i = 0; i < n; i++)
+          if (!entries[i]->dominated.load(std::memory_order_acquire))
+            result.push_back(std::make_pair(entries[i]->added_by_thread,
+                                            entries[i]->sol.yPoint()));
+        return result;
+      }
+    }
+
+    DLOG(LogCategory::SolutionSharing, stdout,
+         "[shared-solutions] getSolutions: normal path; scanning "
+         "published prefix\n");
+    for (size_t i = 0; i < n; i++)
+      if (!entries[i]->dominated.load(std::memory_order_acquire))
+        result.push_back(std::make_pair(entries[i]->added_by_thread,
+                                        entries[i]->sol.yPoint()));
+
+    return result;
+  }
+
   bool empty() const override {
     return liveCount.load(std::memory_order_acquire) == 0;
   }
