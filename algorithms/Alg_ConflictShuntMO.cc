@@ -180,8 +180,14 @@ void ParConflictShuntMO::initializeOptimizer(Solver *s, MaxSATFormula *m) {
 
       if (feasible.load()) {
         upper->updateMOFormulation(wid);
-        upper->blockDominatedRegion(wid,
-                                    upper->workers[wid].first.yPoint());
+        const auto &yp = upper->workers[wid].first.yPoint();
+        std::ostringstream point;
+        point << yp;
+        std::osyncstream(std::cout)
+            << "[s" << wid << "] c initial point " << point.str() << '\n';
+        std::osyncstream(std::cout)
+            << "[s" << wid << "] c o " << point.str() << '\n';
+        upper->blockDominatedRegion(wid, yp);
       }
     }
 
