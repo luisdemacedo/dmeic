@@ -150,6 +150,20 @@ protected:
     for (size_t wid = 0; wid < workers.size(); wid++)
       workers[wid].nConflicts = limit;
   }
+
+  bool initializeWorkerFromFeasibility(
+      size_t wid) { // Tests feasibility, if feasible encodes the MO formulation
+                    // and blocks the solution.
+    if (!firstSolution(wid)) {
+      return false;
+    }
+
+    updateMOFormulation(wid);
+
+    blockDominatedRegion(wid, workers[wid].first.yPoint());
+    return true;
+  }
+
   lbool solve(size_t worker_id);
   void updateMOEncoding(size_t worker_id);
 

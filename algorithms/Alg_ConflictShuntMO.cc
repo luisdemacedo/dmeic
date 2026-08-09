@@ -168,11 +168,23 @@ void ParConflictShuntMO::initializeOptimizer(Solver *s, MaxSATFormula *m) {
     upper->initWorkers();
     setSharedSolutions(upper->getSharedSolutions());
     upper->buildSolversMO();
+
+    std::atomic<bool> feasible{true};
 #pragma omp parallel num_threads(upper->nWorkers())
     {
-      size_t wid = omp_get_thread_num();
-      upper->updateMOFormulation(wid);
+      const size_t wid = omp_get_thread_num();
+      if (!upper->firstSolution(wid))
+        feasible.store(false);
+
+#pragma omp barrier
+
+      if (feasible.load()) {
+        upper->updateMOFormulation(wid);
+        upper->blockDominatedRegion(wid,
+                                    upper->workers[wid].first.yPoint());
+      }
     }
+
     upper->setConflictLimit(conflict_limit);
   }
   // if (lower != NULL) {
