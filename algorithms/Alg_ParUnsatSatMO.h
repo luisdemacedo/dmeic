@@ -37,22 +37,25 @@ public:
                 size_t nWorkers = 2, bool clausesharing = false)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf) {}
 
-  std::vector<MyPartition> generate();
-  MyPartition mix(std::vector<MyPartition>);
+  // std::vector<MyPartition> generate();
+  // MyPartition mix(std::vector<MyPartition>);
 
-  bool buildWorkFormula() override;
   StatusCode searchAgain();
   virtual bool searchUnsatSatMO();
   void search_MO() override;
-  bool extendUL(uint64_t *upperObjv, uint64_t *upperObix);
-  virtual bool extendUL(YPoint &ul);
+  // bool extendUL(uint64_t *upperObjv, uint64_t *upperObix);
+  // virtual bool extendUL(YPoint &ul);
   const std::set<Lit> &blocked_vars() { return blockedVars; };
+  void exploreFencedRegion(size_t wid, const YPoint &yp);
+  std::vector<YPoint> generateExpansionPoints(size_t wid, const YPoint &yp);
 
 protected:
   vec<Lit> explanation{}; // unsat explanation
-  virtual bool rootedSearch(const YPoint &yp);
   std::set<Lit> blockedVars{};
+
+  virtual bool rootedSearch(const YPoint &yp);
   YPoint marker{};
+  std::shared_ptr<waiting_list::WaitingListI> waitingList;
 };
 
 } // namespace openwbo

@@ -41,10 +41,10 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
 
 #pragma omp critical(work_state)
       {
-        point = waiting_list->try_pop();
+        point = localList.try_pop();
 
         if (!point)
-          point = localList.try_pop();
+          point = waiting_list->try_pop();
 
         if (point) {
           active.fetch_add(1);
@@ -88,7 +88,7 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
 #pragma omp critical(work_state)
       {
         if (requeueLocally)
-          localList.requeue(*point, 1);
+          localList.requeue(*point);
 
         active.fetch_sub(1);
       }
