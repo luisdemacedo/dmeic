@@ -179,6 +179,13 @@ protected:
   void shareClauses(size_t wid);
   bool getShareClauses() { return _shareClauses; }
 
+  int getIObjFromLit(size_t wid, Lit lit) {
+    try {
+      return workers[wid].invObjRootLits->at(var(lit));
+    } catch (const std::out_of_range &e) {
+      return -1;
+    }
+  }
   void evalToIndex(size_t wid, const YPoint &yp, uint64_t *objix);
   void evalToIndex(size_t wid, uint64_t *objv, uint64_t *objix);
 

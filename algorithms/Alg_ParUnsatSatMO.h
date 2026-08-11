@@ -34,8 +34,13 @@ public:
   ParUnsatSatMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
                 int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
                 int pb = _PB_SWC_, int pbobjf = _PB_GTE_, int core_budget = -1,
-                size_t nWorkers = 2, bool clausesharing = false)
-      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf) {}
+                size_t nWorkers = 2, bool clausesharing = false,
+                bool ascend = false, bool lower = false, int wl_type = 0)
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
+                   clausesharing) {
+    waiting_list = waiting_list::construct(wl_type, lower, ascend);
+    conflict_limit = core_budget;
+  }
 
   // std::vector<MyPartition> generate();
   // MyPartition mix(std::vector<MyPartition>);
@@ -43,11 +48,11 @@ public:
   StatusCode searchAgain();
   virtual bool searchUnsatSatMO();
   void search_MO() override;
-  // bool extendUL(uint64_t *upperObjv, uint64_t *upperObix);
+  bool extendUL(size_t wid, uint64_t *upperObjv, uint64_t *upperObix);
   // virtual bool extendUL(YPoint &ul);
   const std::set<Lit> &blocked_vars() { return blockedVars; };
   void exploreFencedRegion(size_t wid, const YPoint &yp);
-  std::vector<YPoint> generateExpansionPoints(size_t wid, const YPoint &yp);
+  std::vector<YPoint> generateExpansionPoints(size_t wid, const YPoint yp);
 
 protected:
   vec<Lit> explanation{}; // unsat explanation
@@ -55,7 +60,7 @@ protected:
 
   virtual bool rootedSearch(const YPoint &yp);
   YPoint marker{};
-  std::shared_ptr<waiting_list::WaitingListI> waitingList;
+  std::shared_ptr<waiting_list::WaitingListI> waiting_list;
 };
 
 } // namespace openwbo

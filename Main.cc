@@ -77,6 +77,7 @@
 #include "algorithms/Alg_ConflictShuntMO.h"
 #include "algorithms/Alg_DrillMO.h"
 #include "algorithms/Alg_MaxSAT_Strat_MOCO.h"
+#include "algorithms/Alg_ParUnsatSatMO.h"
 #include "algorithms/Alg_PortfolioMO.h"
 #include "algorithms/Alg_SlideDrillMO.h"
 #include "algorithms/Alg_SlideMO.h"
@@ -246,14 +247,15 @@ IntOption
               "23=mo-us-epsilon, "
               "24=mo-us-budget, "
               "25=mo-us-epsilon-decay, "
-              "26=mo-us_pmin), "
-              "27=mo-us_list_pmin), "
-              "28=drill), " // undocumented
-              "29=portfolio), "
-              "30=parpminimal),"
-              "31=parsd)."
+              "26=mo-us_pmin, "
+              "27=mo-us_list_pmin, "
+              "28=drill, " // undocumented
+              "29=portfolio, "
+              "30=parpminimal,"
+              "31=parsd,"
+              "32=parus)."
               "\n",
-              7, IntRange(0, 31));
+              7, IntRange(0, 32));
 
 IntOption partition_strategy("PartMSU3", "partition-strategy",
                              "Partition strategy (0=sequential, "
@@ -809,10 +811,15 @@ MaxSAT *buildSolver(int argc, char **argv) {
                           pb, pbobjf, n_moco_workers, share_clauses);
     break;
   case _ALGORITHM_PARSLIDEDRILL_:
-    S = new ParSlideDrillShuntMO( // TODO:
-        verbosity, weight, partition_strategy, cardinality, pb, pbobjf,
-        n_moco_workers, share_clauses, apmode, eps, sstrategy, conf_budget,
-        ascend, lower, wl_type);
+    S = new ParSlideDrillShuntMO(verbosity, weight, partition_strategy,
+                                 cardinality, pb, pbobjf, n_moco_workers,
+                                 share_clauses, apmode, eps, sstrategy,
+                                 conf_budget, ascend, lower, wl_type);
+    break;
+  case _ALGORITHM_PARUNSATSAT_:
+    S = new ParUnsatSatMO(verbosity, weight, partition_strategy, cardinality,
+                          pb, pbobjf, conf_budget, n_moco_workers,
+                          share_clauses, ascend, lower, wl_type);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");

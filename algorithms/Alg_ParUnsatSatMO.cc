@@ -16,11 +16,9 @@ using namespace openwbo;
 void ParUnsatSatMO::search_MO() {
   // Build solver
   init();
+  initWorkers();
   answerType = _UNKNOWN_;
   buildSolversMO();
-#pragma omp parallel for
-  for (int i = 0; i < workers.size(); i++)
-    workers[i].solver->setConfBudget(conflict_limit);
 
   YPoint yp{};
   for (int i = 0; i < getFormula()->nObjFunctions(); i++)
@@ -32,9 +30,9 @@ void ParUnsatSatMO::search_MO() {
 
   // encode obj functions
   bool resform[workers.size()];
-#pragma omp parallel for
-  for (size_t wid = 0; wid < workers.size(); wid++)
-    resform[wid] = updateMOFormulationIfSAT(wid);
+#pragma omp parallel num_threads(workers.size())
+  resform[omp_get_thread_num()] =
+      updateMOFormulationIfSAT(omp_get_thread_num());
 
   if (std::all_of(resform, resform + workers.size(),
                   [](bool v) { return v; })) {
@@ -57,7 +55,7 @@ void ParUnsatSatMO::search_MO() {
 bool ParUnsatSatMO::rootedSearch(const YPoint &yp) {
   double runtime = cpuTime();
   lbool sat{};
-  waitingList->insert(yp);
+  waiting_list->insert(yp);
 
   std::atomic<int> active{0};
 
@@ -70,20 +68,25 @@ bool ParUnsatSatMO::rootedSearch(const YPoint &yp) {
 
 #pragma omp critical(work_state)
       {
-        yp = waitingList->try_pop();
+        yp = waiting_list->try_pop();
 
-        if (!yp) {
-          if (active.load() == 0)
-            finished = true;
-        }
+        if (yp)
+          active.fetch_add(1);
+        else if (active.load() == 0)
+          finished = true;
       }
 
-      if (finished) {
+      if (finished)
         break;
-      }
+
+      if (!yp)
+        continue;
+
       exploreFencedRegion(wid, *yp);
+      active.fetch_sub(1);
     }
   }
+  return true;
 }
 
 void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
@@ -91,6 +94,7 @@ void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
   w.assumptions.clear();
   YPoint ul = yp;
   double runtime = cpuTime();
+  lbool sat{};
 
   std::ostringstream oss;
   oss << ul;
@@ -99,7 +103,12 @@ void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
 
   assumeDominatingRegion(wid, ul);
 
-  while (solve(wid) == l_True) {
+  while ((sat = solve(wid)) == l_Undef) {
+    printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
+    shareClauses(wid);
+    shareSolutions(wid, true);
+  }
+  while (sat == l_True) {
     Model m = make_model(w.solver->model);
     // Only block dominated region if m1 gets into the Solution
     if (w.solutions.pushSafe(m)) {
@@ -118,12 +127,25 @@ void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
       runtime = cpuTime();
       printf("%sc new optimal solution (time: %.3f)\n", getSolverId().c_str(),
              runtime - initialTime);
+      shareClauses(wid);
+      shareSolutions(wid, true);
+    }
+    while ((sat = solve(wid)) == l_Undef) {
+      printf("%sc budget exhausted. Retrying...\n", getSolverId().c_str());
+      shareClauses(wid);
+      shareSolutions(wid, true);
     }
   }
 
-  std::vector<YPoint> newULs = generateExpansionPoints(wid, ul);
   shareClauses(wid);
   shareSolutions(wid, true);
+
+  std::vector<YPoint> newULs = generateExpansionPoints(wid, ul);
+#pragma omp critical(work_state)
+  {
+    for (const auto &newUL : newULs)
+      waiting_list->insert(newUL);
+  }
 }
 
 bool ParUnsatSatMO::searchUnsatSatMO() {
@@ -144,41 +166,51 @@ bool ParUnsatSatMO::searchUnsatSatMO() {
 }
 
 std::vector<YPoint> ParUnsatSatMO::generateExpansionPoints(size_t wid,
-                                                           const YPoint &yp) {}
-// bool ParUnsatSatMO::extendUL(uint64_t *upperObjv, uint64_t *upperObjix) {
-//   bool extend = false;
-//   vec<Lit> conflict;
-//   Lit lit;
-//   int iObj;
-//   solver->conflict.copyTo(conflict);
-//   while (conflict.size() > 0) {
-//     lit = conflict.last();
-//     conflict.pop();
-//     iObj = getIObjFromLit(lit);
-//     if (iObj > -1) {
-//       if (upperObjix[iObj] < (*objRootLits[iObj]).size() - 1) {
-//         extend = true;
-//         upperObjix[iObj]++;
-//         upperObjv[iObj] = (*objRootLits[iObj])[upperObjix[iObj]].first;
-//       }
-//     }
-//   }
-//
-//   return extend;
-// }
-// bool ParUnsatSatMO::extendUL(YPoint &yp) {
-//   int nObj = yp.size();
-//   uint64_t upperObjv[nObj];
-//   uint64_t upperObjix[nObj];
-//
-//   for (uint64_t i = 0; i < yp.size(); i++) {
-//     upperObjv[i] = yp[i] + 1;
-//   }
-//   evalToIndex(upperObjv, upperObjix);
-//   bool res = extendUL(upperObjv, upperObjix);
-//
-//   for (uint64_t i = 0; i < yp.size(); i++) {
-//     yp[i] = upperObjv[i] - 1;
-//   }
-//   return res;
-// }
+                                                           const YPoint yp) {
+  int nObj = yp.size();
+  uint64_t upperObjv[nObj];
+  uint64_t upperObjix[nObj];
+
+  for (uint64_t i = 0; i < yp.size(); i++)
+    upperObjv[i] = yp[i] + 1;
+
+  evalToIndex(wid, upperObjv, upperObjix);
+  bool res = extendUL(wid, upperObjv, upperObjix);
+  std::vector<YPoint> newULs = {};
+  if (res) {
+    YPoint newUL = yp;
+    for (uint64_t i = 0; i < yp.size(); i++)
+      upperObjv[i]--;
+    for (size_t i = 0; i < nObj; i++) {
+      if (upperObjv[i] == yp[i])
+        continue;
+      std::swap(newUL[i], upperObjv[i]);
+      newULs.push_back(newUL);
+      std::swap(newUL[i], upperObjv[i]);
+    }
+  }
+  return newULs;
+}
+bool ParUnsatSatMO::extendUL(size_t wid, uint64_t *upperObjv,
+                             uint64_t *upperObjix) {
+  Worker &w = workers[wid];
+  bool extend = false;
+  vec<Lit> conflict;
+  Lit lit;
+  int iObj;
+  w.solver->conflict.copyTo(conflict);
+  while (conflict.size() > 0) {
+    lit = conflict.last();
+    conflict.pop();
+    iObj = getIObjFromLit(wid, lit);
+    if (iObj > -1) {
+      if (upperObjix[iObj] < (*w.objRootLits[iObj]).size() - 1) {
+        extend = true;
+        upperObjix[iObj]++;
+        upperObjv[iObj] = (*w.objRootLits[iObj])[upperObjix[iObj]].first;
+      }
+    }
+  }
+
+  return extend;
+}
