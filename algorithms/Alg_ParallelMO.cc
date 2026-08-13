@@ -172,7 +172,7 @@ void ParallelMO::printAnswer(int type) {
 void ParallelMO::consolidateSolution(size_t wid) {
   Worker &w = workers[wid];
   if (w.first.model().size())
-    sharedSolutions->pushSolutions({w.first}, wid);
+    sharedSolutions->syncSolutions({w.first}, wid, false);
 }
 
 void ParallelMO::printSolutions() {
@@ -236,8 +236,9 @@ void ParallelMO::printSolutions() {
   // TODO: LBSet to file
 
   objectivesFile.open(objv_file);
-  std::ostream &out =
-      (print_my_output) ? static_cast<std::ostream &>(objectivesFile) : std::cout;
+  std::ostream &out = (print_my_output)
+                          ? static_cast<std::ostream &>(objectivesFile)
+                          : std::cout;
 
   for (auto &[t_id, yp] : points) {
     std::string line = "o [s" + std::to_string(t_id) + "]";
