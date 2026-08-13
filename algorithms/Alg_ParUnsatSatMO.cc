@@ -33,7 +33,7 @@ void ParUnsatSatMO::search_MO() {
 #pragma omp parallel num_threads(workers.size())
   {
 	  assert(static_cast<std::size_t>(omp_get_num_threads()) == workers.size());
-	  size_t wid = omp_get_num_threads();
+	  size_t wid = omp_get_thread_num();
   resform[omp_get_thread_num()] =
       updateMOFormulationIfSAT(wid);
   }
