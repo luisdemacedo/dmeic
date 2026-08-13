@@ -32,14 +32,28 @@ void ParUnsatSatMO::search_MO() {
   bool resform[workers.size()];
 #pragma omp parallel num_threads(workers.size())
   {
-	  assert(static_cast<std::size_t>(omp_get_num_threads()) == workers.size());
-	  size_t wid = omp_get_thread_num();
-  resform[omp_get_thread_num()] =
-      updateMOFormulationIfSAT(wid);
+    assert(static_cast<std::size_t>(omp_get_num_threads()) == workers.size());
+    size_t wid = omp_get_thread_num();
+    resform[wid] = updateMOFormulationIfSAT(wid);
+
+    if (resform[wid]) {
+      consolidateSolution(wid);
+      blockDominatedRegion(wid, workers[wid].first.yPoint());
+    }
+
+#pragma omp barrier
+    if (resform[wid]) {
+      shareClauses(wid);
+      shareSolutions(wid, true);
+    }
   }
 
-  if (std::all_of(resform, resform + workers.size(),
-                  [](bool v) { return v; })) {
+  bool feasible = resform[0];
+
+  assert(std::all_of(resform, resform + workers.size(),
+                     [feasible](bool v) { return v == feasible; }));
+
+  if (feasible) {
     printf("c search\n");
     searchUnsatSatMO();
   } else {
