@@ -31,8 +31,12 @@ void ParUnsatSatMO::search_MO() {
   // encode obj functions
   bool resform[workers.size()];
 #pragma omp parallel num_threads(workers.size())
+  {
+	  assert(static_cast<std::size_t>(omp_get_num_threads()) == workers.size());
+	  size_t wid = omp_get_num_threads();
   resform[omp_get_thread_num()] =
-      updateMOFormulationIfSAT(omp_get_thread_num());
+      updateMOFormulationIfSAT(wid);
+  }
 
   if (std::all_of(resform, resform + workers.size(),
                   [](bool v) { return v; })) {
