@@ -175,12 +175,17 @@ void ParPMinimalMO::searchFromRandomizedInitialSolutions(
       } while ((sat = solve(wid)) != l_True &&
                (sat == l_Undef || w.solver->conflict.size() > 0));
 
-    w.time1stSol = cpuTime() - initialTime;
-    std::osyncstream(std::cout)
-        << getSolverId()
-        << "c initial solution found (time: " << cpuTime() - initialTime
-        << ")\n";
-    searchParPMinimalMO(wid);
+    if (sat == l_True) {
+      w.time1stSol = cpuTime() - initialTime;
+      std::osyncstream(std::cout)
+          << getSolverId()
+          << "c initial solution found (time: " << cpuTime() - initialTime
+          << ")\n";
+      searchParPMinimalMO(wid);
+    } else {
+      std::osyncstream(std::cout)
+          << getSolverId() << "c no initial solution found\n";
+    }
   }
 }
 
