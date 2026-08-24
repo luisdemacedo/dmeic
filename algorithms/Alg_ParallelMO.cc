@@ -706,6 +706,14 @@ void ParallelMO::shareClauses(size_t wid) {
   std::vector<vec<Lit>> receivedClauses =
       sharedLearntClauses->syncSharedClauses(clauses.size(), filteredClauses,
                                              wid);
+
+  std::erase_if(receivedClauses, [&](const vec<Lit> &clause) {
+    for (size_t i = 0; i < clause.size(); i++)
+      if (var(clause[i]) > w.clause_sharing_var_cutoff)
+        return true;
+    return false;
+  });
+
   w.solver->addLearntClauses(receivedClauses);
 }
 

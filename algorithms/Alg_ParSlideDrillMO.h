@@ -18,6 +18,7 @@
 #include "./Alg_ServerMO.h"
 #include "utils/System.h"
 #include <utility>
+#include <variant>
 
 namespace openwbo {
 
@@ -65,11 +66,25 @@ public:
   class SDWorkerState {
   public:
     YPoint drill_marker{};
-    // results of slide, and corresponding blocking variables
-    std::map<YPoint, Node> mem{};
-    std::map<Lit, YPoint> slide_map{};
-    // points (a)bove lower region of test
-    std::unique_ptr<waiting_list::WaitingListI> local_list;
+    size_t nextSharedUpdate{0};
+    Glucose::Var installedSharedVarCutoff{0};
+  };
+
+  struct DefineSharedVar {
+    Glucose::Var var;
+    YPoint yp;
+  };
+
+  struct FinalizeSharedVar {
+    Glucose::Var var;
+  };
+
+  using SharedSlideVarUpdatePayload =
+      std::variant<DefineSharedVar, FinalizeSharedVar>;
+
+  struct SharedSlideVarUpdate {
+    SharedSlideVarUpdatePayload payload;
+    size_t wid{0};
   };
 
 protected:
@@ -84,6 +99,17 @@ protected:
   waiting_list::Types wl_type{};
   bool lower{};
   bool ascend{};
+  // results of slide, and corresponding blocking variables
+  std::map<YPoint, Node> mem{};
+  std::map<Lit, YPoint> slide_map{};
+  // points (a)bove lower region of test
+  std::atomic<size_t> currentSharedVarId{0};
+  std::vector<SharedSlideVarUpdate> sharedUpdates{};
+  Glucose::Var publishDefinition(size_t wid, const YPoint &yp);
+  void publishFinalization(size_t wid, Glucose::Var var);
+  void applySharedUpdate(size_t wid, const DefineSharedVar &update);
+  void applySharedUpdate(size_t wid, const FinalizeSharedVar &update);
+  void applyUpdates(size_t wid);
 };
 
 class ParSlideDrillServerMO : public virtual ParallelMOServer,

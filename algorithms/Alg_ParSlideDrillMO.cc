@@ -27,13 +27,15 @@ void ParSlideDrillMO::search_MO() {
   printAnswer(answerType);
 }
 bool ParSlideDrillMO::searchBoundHonerMO() {
+  if (sharedUpdates.empty())
+    currentSharedVarId.store(workers[0].solver->nVars());
+
   // drill
   std::atomic<int> active{0};
 
 #pragma omp parallel num_threads(workers.size())
   {
     const size_t wid = omp_get_thread_num();
-    auto &localList = *worker_states[wid].local_list;
 
     while (true) {
       std::optional<YPoint> point;
@@ -41,27 +43,14 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
 
 #pragma omp critical(work_state)
       {
-        point = localList.try_pop();
+        point = waiting_list->try_pop();
 
-        if (!point)
-          point = waiting_list->try_pop();
-
-        if (point) {
+        if (point)
           active.fetch_add(1);
-        } else if (active.load() == 0) {
-          bool allLocalEmpty = true;
-
-          for (const auto &ws : worker_states) {
-            if (ws.local_list->size() > 0) {
-              allLocalEmpty = false;
-              break;
-            }
-          }
-          if (allLocalEmpty && waiting_list->size() == 0) {
-            finished = true;
-          }
-        }
+        else if (active.load() == 0 && waiting_list->size() == 0)
+          finished = true;
       }
+
       if (finished)
         break;
 
@@ -70,25 +59,26 @@ bool ParSlideDrillMO::searchBoundHonerMO() {
 
       // A point is published only after its solution is shared. Import all
       // newly published dominated-region blocks before processing that point.
+      applyUpdates(wid);
       shareSolutions(wid, true);
 
       DrillResult result = drillFromPoint(wid, *point);
-      bool requeueLocally = false;
+      bool requeue = false;
 
       if (result == DrillResult::FoundModel) {
-        requeueLocally = slide(wid) == SlideResult::Budget;
+        requeue = slide(wid) == SlideResult::Budget;
       } else if (result == DrillResult::UnsatCore) {
         // Skip
       } else if (result == DrillResult::UnsatNoCore) {
 
       } else if (result == DrillResult::Budget) {
-        requeueLocally = true;
+        requeue = true;
       }
 
 #pragma omp critical(work_state)
       {
-        if (requeueLocally)
-          localList.requeue(*point);
+        if (requeue)
+          waiting_list->requeue(*point);
 
         active.fetch_sub(1);
       }
@@ -103,22 +93,32 @@ DrillResult ParSlideDrillMO::drillFromPoint(size_t wid, const YPoint &yp) {
   SDWorkerState &ws = worker_states[wid];
   lbool sat{l_False};
   w.assumptions.clear();
+  std::vector<Lit> deps;
   std::ostringstream oss;
   oss << getSolverId() << "c " << "drill from " << yp << " with hv=" << hv(yp)
       << "\n";
   std::osyncstream(std::cout) << oss.str();
 
-  auto it = ws.mem.find(yp);
-  assumeDominatingRegion(wid, yp);
-  if (it != ws.mem.end()) {
-    ws.drill_marker = yp;
-    for (auto l : it->second.deps)
-      w.assumptions.push(~l);
+#pragma omp critical(mem)
+  {
+    auto it = mem.find(yp);
+    if (it != mem.end())
+      deps = it->second.deps;
   }
+
+  if (!deps.empty())
+    ws.drill_marker = yp;
+
+  for (auto l : deps)
+    w.assumptions.push(~l);
+
+  assumeDominatingRegion(wid, yp);
 
   oss.str("");
   oss.clear();
 
+  applyUpdates(wid);
+  shareClauses(wid);
   sat = solve(wid);
   if (sat == l_False) {
     oss << getSolverId() << "c "
@@ -145,22 +145,37 @@ SlideResult ParSlideDrillMO::slide(size_t wid) {
   auto &ws = worker_states[wid];
   Node *n = nullptr;
   lbool sat{};
+  bool resumed = false;
+  std::vector<Lit> deps;
   assumeDominatingRegion(wid, ws.drill_marker);
-  auto n_it = ws.mem.find(ws.drill_marker);
-  if (n_it != ws.mem.end()) {
+  std::map<YPoint, Node>::iterator n_it;
+#pragma omp critical(mem)
+  {
+    n_it = mem.find(ws.drill_marker);
+    if (n_it != mem.end()) {
+      n = &n_it->second;
+      deps = n_it->second.deps;
+      resumed = true;
+    }
+  }
+
+  if (resumed) {
     std::ostringstream oss;
     oss << ws.drill_marker;
     std::osyncstream(std::cout)
         << getSolverId() << "c restart slide under " << oss.str() << endl;
     // block region below slide produces
-    for (auto dep : n_it->second.deps)
+    for (auto dep : deps)
       w.assumptions.push(~dep);
   } else {
-    Node n{ws.drill_marker};
-    auto pair = ws.mem.insert({ws.drill_marker, n});
-    n_it = pair.first;
+    Node n2{ws.drill_marker};
+#pragma omp critical(mem)
+    {
+      auto pair = mem.insert({ws.drill_marker, n2});
+      n_it = pair.first;
+      n = &n_it->second;
+    }
   }
-  n = &n_it->second;
 
   std::vector<YPoint> new_solutions_batch;
 
@@ -170,13 +185,18 @@ SlideResult ParSlideDrillMO::slide(size_t wid) {
     if (w.solutions.pushSafe(m)) {
       // block region dominated by last point
       YPoint yp = evalModel(m);
-      // create slide variable for newly found solution
-      Lit l = mkLit(w.solver->newVar());
-      n->deps.push_back(l);
-      ws.slide_map[l] = yp;
 
-      // add new solution to the batch, which will be added to the waiting list
-      // after the slide is complete
+      // create slide variable for newly found solution
+
+      // Lit l = mkLit(w.solver->newVar());
+      Lit l = mkLit(publishDefinition(wid, yp));
+      n->deps.push_back(l);
+
+#pragma omp critical(slide_map)
+      slide_map[l] = yp;
+
+      // add new solution to the batch, which will be added to the waiting
+      // list after the slide is complete
       new_solutions_batch.push_back(yp);
 
       std::ostringstream oss;
@@ -192,19 +212,22 @@ SlideResult ParSlideDrillMO::slide(size_t wid) {
       blockStep(wid, yp); // block region dominated by yp
       // add temporary clause, and set toggling variable through global
       // assumptions
-      asssumeIncomparableRegion(wid, yp, l);
+      // asssumeIncomparableRegion(wid, yp, l);
       w.assumptions.push(~l);
-      shareClauses(wid);
     }
+    applyUpdates(wid);
+    shareClauses(wid);
   } while ((sat = solve(wid)) == l_True);
 
   // If the slide is successful (i.e. complete), add the temporary clauses to
   // the solver
-  if (sat != l_Undef)
+  if (sat != l_Undef) {
     for (Lit l : n->deps) {
-      w.solver->addClause(l);
+      publishFinalization(wid, var(l));
+      // w.solver->addClause(l);
     }
-
+    applyUpdates(wid);
+  }
   shareSolutions(wid, true);
 
 #pragma omp critical(work_state)
@@ -229,7 +252,9 @@ SlideResult ParSlideDrillMO::slide(size_t wid) {
     return SlideResult::Budget;
   }
 
-  ws.mem.erase(ws.drill_marker);
+#pragma omp critical(mem)
+  mem.erase(ws.drill_marker);
+
   return SlideResult::Done;
 }
 void ParSlideDrillMO::asssumeIncomparableRegion(size_t wid, const YPoint &yp,
@@ -253,10 +278,61 @@ void ParSlideDrillMO::asssumeIncomparableRegion(size_t wid, const YPoint &yp,
 void ParSlideDrillMO::initWorkers() {
   ParallelMO::initWorkers();
   worker_states.resize(workers.size());
-  for (size_t wid = 0; wid < workers.size(); wid++) {
+  for (size_t wid = 0; wid < workers.size(); wid++)
     worker_states[wid].drill_marker.clear();
-    worker_states[wid].local_list =
-        waiting_list::construct(static_cast<int>(wl_type), lower, ascend);
+}
+
+Glucose::Var ParSlideDrillMO::publishDefinition(size_t wid, const YPoint &yp) {
+  Glucose::Var id;
+
+#pragma omp critical(shared_updates)
+  {
+    id = static_cast<Glucose::Var>(currentSharedVarId++);
+    sharedUpdates.push_back({DefineSharedVar{id, yp}, wid});
+  }
+
+  return id;
+}
+
+void ParSlideDrillMO::publishFinalization(size_t wid, Glucose::Var var) {
+#pragma omp critical(shared_updates)
+  sharedUpdates.push_back({FinalizeSharedVar{var}, wid});
+}
+
+void ParSlideDrillMO::applySharedUpdate(size_t wid,
+                                        const DefineSharedVar &update) {
+  Worker &w = workers[wid];
+  SDWorkerState &ws = worker_states[wid];
+
+  while (w.solver->nVars() <= update.var)
+    w.solver->newVar();
+
+  asssumeIncomparableRegion(wid, update.yp, mkLit(update.var));
+
+  ws.installedSharedVarCutoff = update.var + 1;
+  w.clause_sharing_var_cutoff = w.solver->nVars() - 1;
+}
+
+void ParSlideDrillMO::applySharedUpdate(size_t wid,
+                                        const FinalizeSharedVar &update) {
+  Worker &w = workers[wid];
+  w.solver->addClause(mkLit(update.var));
+}
+
+void ParSlideDrillMO::applyUpdates(size_t wid) {
+  SDWorkerState &ws = worker_states[wid];
+  std::vector<SharedSlideVarUpdate> pending;
+
+#pragma omp critical(shared_updates)
+  pending.assign(sharedUpdates.begin() + ws.nextSharedUpdate,
+                 sharedUpdates.end());
+
+  for (const auto &update : pending) {
+    // if (update.wid != wid)
+    std::visit(
+        [this, wid](const auto &payload) { applySharedUpdate(wid, payload); },
+        update.payload);
+    ws.nextSharedUpdate++;
   }
 }
 
