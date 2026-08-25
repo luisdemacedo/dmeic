@@ -167,28 +167,31 @@ void ParConflictShuntMO::initializeOptimizer(Solver *s, MaxSATFormula *m) {
     upper->setFormula(getFormula());
     upper->initWorkers();
     setSharedSolutions(upper->getSharedSolutions());
-    upper->buildSolversMO();
+    const Model initialModel{workers[MASTER_WORKER_ID].first.model()};
 
-    std::atomic<bool> feasible{true};
+    // worker 0 inherits the solver from the master, while the other workers get
+    // a clone of it.
+    workers[MASTER_WORKER_ID].solver = static_cast<Solver *>(s->clone());
+
+    for (size_t wid = 0; wid < upper->nWorkers(); wid++) {
+      upper->workers[wid].solver =
+          wid == 0 ? s : static_cast<Solver *>(s->clone());
+      upper->workers[wid].first =
+          Solution::OneSolution{&upper->workers[wid].solutions, initialModel};
+    }
+
 #pragma omp parallel num_threads(upper->nWorkers())
     {
       const size_t wid = omp_get_thread_num();
-      if (!upper->firstSolution(wid))
-        feasible.store(false);
-
-#pragma omp barrier
-
-      if (feasible.load()) {
-        upper->updateMOFormulation(wid);
-        const auto &yp = upper->workers[wid].first.yPoint();
-        std::ostringstream point;
-        point << yp;
-        std::osyncstream(std::cout)
-            << "[s" << wid << "] c initial point " << point.str() << '\n';
-        std::osyncstream(std::cout)
-            << "[s" << wid << "] c o " << point.str() << '\n';
-        upper->blockDominatedRegion(wid, yp);
-      }
+      upper->updateMOFormulation(wid);
+      const auto &yp = upper->workers[wid].first.yPoint();
+      std::ostringstream point;
+      point << yp;
+      std::osyncstream(std::cout)
+          << "[s" << wid << "] c initial point " << point.str() << '\n';
+      std::osyncstream(std::cout)
+          << "[s" << wid << "] c o " << point.str() << '\n';
+      upper->blockDominatedRegion(wid, yp);
     }
 
     upper->setConflictLimit(conflict_limit);
@@ -219,9 +222,7 @@ void ParConflictShuntMO::build() {
   pareto::min = YPoint(n);
   pareto::hv_total = pareto::hv_shift(pareto::min, pareto::max);
 
-  Solver *masterSolver = workers[0].solver;
-  initializeOptimizer(masterSolver, getMaxSATFormula());
-  masterSolver->setConfBudget(conflict_limit);
+  workers[MASTER_WORKER_ID].solver->setConfBudget(conflict_limit);
 }
 
 // will propagate changes innoculated by Master.
@@ -269,6 +270,7 @@ StatusCode ParConflictShuntMO::searchConflictShuntMO() {
 void ParConflictShuntMO::search_MO() {
   build();
   if (firstSolution(MASTER_WORKER_ID)) {
+    initializeOptimizer(workers[MASTER_WORKER_ID].solver, getMaxSATFormula());
     buildWorkFormula();
     blockDominatedRegion(MASTER_WORKER_ID,
                          workers[MASTER_WORKER_ID].first.yPoint());
