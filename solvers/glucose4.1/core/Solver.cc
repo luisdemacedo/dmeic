@@ -316,7 +316,7 @@ Solver::Solver(const Solver &s)
   s.seen.memCopyTo(seen);
   s.permDiff.memCopyTo(permDiff);
   s.polarity.memCopyTo(polarity);
-  s.fixed_polarity.memCopyTo(polarity);
+  s.fixed_polarity.memCopyTo(fixed_polarity);
   s.decision.memCopyTo(decision);
   s.trail.memCopyTo(trail);
   s.order_heap.copyTo(order_heap);
