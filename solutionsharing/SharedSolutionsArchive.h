@@ -109,23 +109,25 @@ public:
     auto t_start = clock::now();
     std::vector<TaggedSolution *> toAdd = {};
     size_t n = published.load(std::memory_order_acquire);
+    const size_t archiveLimit = archive.size();
 
     for (const auto &c : candidates) {
       openwbo::Solution::OneSolution cCopy = c;
       const auto &cYPoint = cCopy.yPoint();
       bool skip = false;
-      for (size_t i = 0; i < n; i++) {
-        assert(entries[i] != nullptr);
-        if (entries[i]->dominated.load(std::memory_order_acquire))
+      for (size_t i = 0; i < archiveLimit; i++) {
+        TaggedSolution &entry = archive[i];
+
+        if (entry.dominated.load(std::memory_order_acquire))
           continue;
-        openwbo::Solution::OneSolution &tsSol = entries[i]->sol;
-        auto &sYPoint = tsSol.yPoint();
+
+        auto &sYPoint = entry.sol.yPoint();
 
         if (sYPoint == cYPoint || pareto::dominates(sYPoint, cYPoint)) {
           skip = true;
           break;
         } else if (pareto::dominates(cYPoint, sYPoint)) {
-          if (!entries[i]->dominated.exchange(true, std::memory_order_acq_rel))
+          if (!entry.dominated.exchange(true, std::memory_order_acq_rel))
             liveCount.fetch_sub(1, std::memory_order_release);
         }
       }
