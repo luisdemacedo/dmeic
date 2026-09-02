@@ -69,13 +69,17 @@ PBObjFunction RootLitsSliced::thaw(const std::set<Lit> &vars) {
 
   set<uint64_t> sums{};
   sums.insert(0);
-  // get the current list of sums
+  // get the current list of sums. me stores keys shifted by +1
+  // relative to the attainable sums
   for (const auto &el : me)
-    sums.insert(el.first);
+    sums.insert(el.first - 1);
 
   allSums(v.begin(), v.end(), sums);
   cur = std::move(*openwbo::add(&delta, &cur));
 
+  // me must be rebuilt from scratch: insert appends, and at_key
+  // relies on the keys being sorted and unique
+  clear();
   for (auto &el : sums)
     me.insert(el + 1, {el + 1, muse.at_key(el + 1)->second});
   return cur;
