@@ -111,26 +111,34 @@ public:
     size_t n = published.load(std::memory_order_acquire);
     const size_t archiveLimit = archive.size();
 
+    auto inspect = [&](TaggedSolution &entry,
+                       const openwbo::YPoint &candidate) {
+      if (entry.dominated.load(std::memory_order_acquire))
+        return false;
+
+      auto &yp = entry.sol.yPoint();
+
+      if (yp == candidate || pareto::dominates(yp, candidate))
+        return true;
+
+      if (pareto::dominates(candidate, yp))
+        if (!entry.dominated.exchange(true, std::memory_order_acq_rel))
+          liveCount.fetch_sub(1, std::memory_order_release);
+
+      return false;
+    };
+
     for (const auto &c : candidates) {
-      openwbo::Solution::OneSolution cCopy = c;
-      const auto &cYPoint = cCopy.yPoint();
       bool skip = false;
-      for (size_t i = 0; i < archiveLimit; i++) {
-        TaggedSolution &entry = archive[i];
 
-        if (entry.dominated.load(std::memory_order_acquire))
-          continue;
+      openwbo::Solution::OneSolution cCopy = c;
 
-        auto &sYPoint = entry.sol.yPoint();
+      for (size_t i = 0; i < n && !skip; i++)
+        skip = inspect(*entries[i], cCopy.yPoint());
 
-        if (sYPoint == cYPoint || pareto::dominates(sYPoint, cYPoint)) {
-          skip = true;
-          break;
-        } else if (pareto::dominates(cYPoint, sYPoint)) {
-          if (!entry.dominated.exchange(true, std::memory_order_acq_rel))
-            liveCount.fetch_sub(1, std::memory_order_release);
-        }
-      }
+      for (size_t i = n; i < archiveLimit && !skip; i++)
+        skip = inspect(archive[i], cCopy.yPoint());
+
       if (skip)
         continue;
 
@@ -172,11 +180,20 @@ public:
     auto t_start = clock::now();
     std::vector<openwbo::Solution::OneSolution> result;
     size_t n = published.load(std::memory_order_acquire);
+
+    auto pullEntry = [&](TaggedSolution &entry) {
+      if (!entry.dominated.load(std::memory_order_acquire) &&
+          entry.added_by_thread != thread_id &&
+          solverTimestamps[thread_id] < entry.ts) {
+        result.push_back(entry.sol);
+      }
+    };
+
     for (size_t i = 0; i < n; i++)
-      if (!entries[i]->dominated.load(std::memory_order_acquire) &&
-          entries[i]->added_by_thread != thread_id &&
-          solverTimestamps[thread_id] < entries[i]->ts)
-        result.push_back(entries[i]->sol);
+      pullEntry(*entries[i]);
+
+    for (size_t i = n; i < archive.size(); i++)
+      pullEntry(archive[i]);
 
     auto t_end = clock::now();
     solutionsPulledByThread[thread_id] += result.size();
@@ -192,7 +209,7 @@ public:
          static_cast<long long>(
              std::chrono::duration_cast<std::chrono::milliseconds>(callPullTime)
                  .count()),
-         published.load(std::memory_order_acquire), result.size());
+         archive.size(), result.size());
 
     return result;
   }
