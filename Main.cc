@@ -377,6 +377,11 @@ StringOption portfolio_config("Portfolio", "config",
 IntOption n_moco_workers("Parallel MOCO", "nworkers",
                          "Number of threads to use for parallel MOCO.\n", 4,
                          IntRange(1, 64));
+
+IntOption stride("Parallel MOCO", "stride",
+                 "Stride for parallel MOCO (ParUnsatSat only).\n", 1,
+                 IntRange(1, 64));
+
 BoolOption
     stop_search_flag("Portfolio", "stop-search-flag",
                      "Whether to stop the portfolio search after the first "
@@ -819,7 +824,7 @@ MaxSAT *buildSolver(int argc, char **argv) {
   case _ALGORITHM_PARUNSATSAT_:
     S = new ParUnsatSatMO(verbosity, weight, partition_strategy, cardinality,
                           pb, pbobjf, conf_budget, n_moco_workers,
-                          share_clauses, ascend, lower, wl_type);
+                          share_clauses, ascend, lower, wl_type, stride);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");

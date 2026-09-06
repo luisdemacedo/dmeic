@@ -200,11 +200,12 @@ std::vector<YPoint> ParUnsatSatMO::generateExpansionPoints(size_t wid,
     for (uint64_t i = 0; i < yp.size(); i++)
       upperObjv[i]--;
     for (size_t i = 0; i < nObj; i++) {
+      const uint64_t max = getFormula()->getUB(i) - getFormula()->getLB(i);
       if (upperObjv[i] == yp[i])
         continue;
-      std::swap(newUL[i], upperObjv[i]);
+      newUL[i] = std::min(newUL[i] + stride * (upperObjv[i] - newUL[i]), max);
       newULs.push_back(newUL);
-      std::swap(newUL[i], upperObjv[i]);
+      newUL[i] = yp[i];
     }
   }
   return newULs;
