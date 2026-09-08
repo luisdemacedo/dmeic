@@ -8,6 +8,7 @@
 #endif
 
 #include "IClauseSharingHeuristic.h"
+#include <iostream>
 #include <vector>
 
 using NSPACE::Lit;
@@ -18,7 +19,9 @@ namespace clausesharing {
 class SizeHeuristic : public IClauseSharingHeuristic {
 
 public:
-  SizeHeuristic(size_t size = 8) : cutoff(size) {}
+  SizeHeuristic(size_t size = 8) : cutoff(size) {
+    std::cout << "c clause sharing size cutoff: " << cutoff << '\n';
+  }
 
   std::vector<vec<Lit>>
   filter(const std::vector<vec<Lit>> &sharedClauses) override {
