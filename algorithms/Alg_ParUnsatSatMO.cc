@@ -104,6 +104,7 @@ bool ParUnsatSatMO::rootedSearch(const YPoint &yp) {
       active.fetch_sub(1);
     }
   }
+  waiting_list->report();
   return true;
 }
 
@@ -162,7 +163,7 @@ void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
 #pragma omp critical(work_state)
   {
     for (const auto &newUL : newULs)
-      waiting_list->insert(newUL);
+      waiting_list->insertAndPrune(newUL);
   }
 }
 
@@ -203,7 +204,7 @@ std::vector<YPoint> ParUnsatSatMO::generateExpansionPoints(size_t wid,
       const uint64_t max = getFormula()->getUB(i) - getFormula()->getLB(i);
       if (upperObjv[i] == yp[i])
         continue;
-      newUL[i] = std::min(newUL[i] + stride * (upperObjv[i] - newUL[i]), max);
+      newUL[i] = std::min(max, std::max(upperObjv[i], newUL[i] * stride));
       newULs.push_back(newUL);
       newUL[i] = yp[i];
     }

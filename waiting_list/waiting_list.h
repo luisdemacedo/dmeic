@@ -47,6 +47,10 @@ class WaitingListI {
 public:
   virtual YPoint pop() = 0;
   virtual void insert(const YPoint &yp, bool force = false, int note = 0) = 0;
+  virtual void insertAndPrune(const YPoint &yp, bool force = false,
+                              int note = 0) {
+    throw std::runtime_error("insertAndPrune not implemented");
+  }
   virtual void unpop(int note = 0) { insert(popped, true, note); }
   virtual void reset() {}
   virtual int size() = 0;
@@ -83,6 +87,7 @@ public:
         max_size = sz;
     }
   }
+
   void report() override {
     std::vector<YPoint> v;
     v.reserve(size());
@@ -121,12 +126,45 @@ public:
         max_size = sz;
     }
   }
+
+  void insertAndPrune(const YPoint &yp, bool force = false,
+                      int note = 0) override { // for ParUnsatSat
+
+    prune_insertions++;
+    if (prune_insertions % 1000 == 0) {
+      std::cout << "c waiting list pruning: insertions=" << prune_insertions
+                << " discarded=" << engulfed_fences_discarded
+                << " removed=" << pending_fences_pruned << endl;
+    }
+
+    bool firstSeen = set.insert(yp).second;
+    if (!force && !firstSeen)
+      return;
+
+    if (std::any_of(stack.begin(), stack.end(),
+                    [&](const YPoint &p) { return pareto::dominates(yp, p); })) {
+      engulfed_fences_discarded++;
+      return;
+    }
+
+    pending_fences_pruned +=
+        std::erase_if(stack, [&](const YPoint &p) {
+          return pareto::dominates(p, yp);
+        });
+
+    stack.push_back(yp);
+  }
+
   void report() override {
     std::vector<YPoint> v;
     v.reserve(size());
     std::cout << "c waiting list statistics" << endl;
     std::cout << "c size:" << size() << endl;
     std::cout << "c max_size: " << max_size << endl;
+    std::cout << "c prune insertions: " << prune_insertions << endl;
+    std::cout << "c engulfed fences discarded: " << engulfed_fences_discarded
+              << endl;
+    std::cout << "c pending fences pruned: " << pending_fences_pruned << endl;
     while (size())
       v.push_back(pop());
     reverse(v.begin(), v.end());
@@ -139,6 +177,9 @@ public:
 private:
   std::vector<YPoint> stack;
   std::set<YPoint> set;
+  size_t prune_insertions = 0;
+  size_t engulfed_fences_discarded = 0;
+  size_t pending_fences_pruned = 0;
 };
 
 // polarity false: large hv first. polarity true: small hv first
