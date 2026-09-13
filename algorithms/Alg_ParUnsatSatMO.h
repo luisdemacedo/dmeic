@@ -36,7 +36,7 @@ public:
                 int pb = _PB_SWC_, int pbobjf = _PB_GTE_, int core_budget = -1,
                 size_t nWorkers = 2, bool clausesharing = false,
                 bool ascend = false, bool lower = false, int wl_type = 0,
-                int stride = 1)
+                double stride = 1.0)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
                    clausesharing) {
     waiting_list = waiting_list::construct(wl_type, lower, ascend);
@@ -59,7 +59,7 @@ public:
 protected:
   vec<Lit> explanation{}; // unsat explanation
   std::set<Lit> blockedVars{};
-  int stride = 1;
+  double stride = 1.0;
 
   virtual bool rootedSearch(const YPoint &yp);
   YPoint marker{};

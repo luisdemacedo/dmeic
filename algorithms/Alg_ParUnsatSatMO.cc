@@ -1,4 +1,5 @@
 #include "Alg_ParUnsatSatMO.h"
+#include <cmath>
 #include "../Pareto.h"
 #include "core/SolverTypes.h"
 #include <algorithm> // std::max
@@ -204,7 +205,11 @@ std::vector<YPoint> ParUnsatSatMO::generateExpansionPoints(size_t wid,
       const uint64_t max = getFormula()->getUB(i) - getFormula()->getLB(i);
       if (upperObjv[i] == yp[i])
         continue;
-      newUL[i] = std::min(max, std::max(upperObjv[i], newUL[i] * stride));
+      const long double scaled =
+          std::ceil(static_cast<long double>(newUL[i]) * stride);
+      const uint64_t expanded =
+          scaled >= max ? max : static_cast<uint64_t>(scaled);
+      newUL[i] = std::min(max, std::max(upperObjv[i], expanded));
       newULs.push_back(newUL);
       newUL[i] = yp[i];
     }

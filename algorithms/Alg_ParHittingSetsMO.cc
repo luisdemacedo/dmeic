@@ -10,33 +10,31 @@ using namespace openwbo;
 // using namespace NSPACE;
 using NSPACE::toLit;
 
-// this clones every variable in the solver. Make sure it is called
-// accordingly
 void ParHittingSetsMO::initializeOptimizer(Solver *solv, MaxSATFormula *mxf) {
-  // auto &f = *mxf;
-  // for (int i = 0, n = getFormula()->nObjFunctions(); i < n; ++i) {
-  //   auto pb = getFormula()->getObjFunction(i);
-  //   f.addObjFunction(pb);
-  // }
-  // for (int i = 0, n = getFormula()->nInitialVars(); i < n; ++i)
-  //   f.newVar();
-  // {
-  //   f.setInitialVars(f.nVars());
-  //   optim->loadFormula(&f);
-  //   optim->ConflictLimit(conflict_limit);
-  //   optim->build();
-  //   auto formula = optim->getFormula();
-  //   int64_t min = 0, max = 0;
-  //   for (int i = 0; i < formula->nObjFunctions(); i++) {
-  //     max = formula->getObjFunction(i)->ub();
-  //     formula->setUB(i, max);
-  //     formula->setTighterUB(i, max);
-  //     min = formula->getObjFunction(i)->lb();
-  //     formula->setLB(i, min);
-  //     formula->setTighterLB(i, min);
-  //   };
-  //   formula->setFormat(_FORMAT_PB_);
-  // }
+  auto &f = *mxf;
+  for (int i = 0, n = getFormula()->nObjFunctions(); i < n; ++i) {
+    auto pb = getFormula()->getObjFunction(i);
+    f.addObjFunction(pb);
+  }
+  for (int i = 0, n = getFormula()->nInitialVars(); i < n; ++i)
+    f.newVar();
+  {
+    f.setInitialVars(f.nVars());
+    optim->loadFormula(&f);
+    optim->ConflictLimit(conflict_limit);
+    optim->build();
+    auto formula = optim->getFormula();
+    int64_t min = 0, max = 0;
+    for (int i = 0; i < formula->nObjFunctions(); i++) {
+      max = formula->getObjFunction(i)->ub();
+      formula->setUB(i, max);
+      formula->setTighterUB(i, max);
+      min = formula->getObjFunction(i)->lb();
+      formula->setLB(i, min);
+      formula->setTighterLB(i, min);
+    };
+    formula->setFormat(_FORMAT_PB_);
+  }
 }
 
 void ParHittingSetsMO::genLowerBoundSet() { optim->searchAgain(); }
@@ -155,17 +153,16 @@ void ParHittingSetsMO::incrementFormula() {
   // optim->checkSols();
 }
 bool ParHittingSetsMO::setup_approx() {
-  // if (!diagnoses.size())
-  //   return false;
-  // incrementFormula();
-  // diagnoses.clear();
-  // optim->increment();
-  // return optim->not_done();
-  return false;
+  if (!diagnoses.size())
+    return false;
+  incrementFormula();
+  diagnoses.clear();
+  optim->increment();
+  return optim->not_done();
 }
 
 bool ParHittingSetsMO::incorporate_approx() {
-  // consolidateSolution();
+  consolidateSolution();
   return true;
 }
 
@@ -176,8 +173,8 @@ void ParHittingSetsMO::consolidateSolution() {
 
 void ParHittingSetsMO::vectorVec(const std::vector<Lit> &vector,
                                  vec<Lit> &vec) {
-  // for (int i = 0, n = vec.size(); i < n; i++)
-  // vec[i] = vector[i];
+  for (int i = 0, n = vec.size(); i < n; i++)
+    vec[i] = vector[i];
 }
 void ParHittingSetsMO::build() {
   // PBtoCNF::build();

@@ -378,9 +378,9 @@ IntOption n_moco_workers("Parallel MOCO", "nworkers",
                          "Number of threads to use for parallel MOCO.\n", 4,
                          IntRange(1, 64));
 
-IntOption stride("Parallel MOCO", "stride",
-                 "Stride for parallel MOCO (ParUnsatSat only).\n", 1,
-                 IntRange(1, 64));
+DoubleOption stride("Parallel MOCO", "stride",
+                    "Stride for parallel MOCO (ParUnsatSat only).\n", 1.0,
+                    DoubleRange(1.0, true, 64.0, true));
 
 BoolOption
     stop_search_flag("Portfolio", "stop-search-flag",
