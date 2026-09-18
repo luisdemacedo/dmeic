@@ -111,6 +111,7 @@ void ParPMinimalMO::searchFromRandomizedInitialSolutions(
   {
     size_t wid = omp_get_thread_num();
     Worker &w = workers[wid];
+    w.useConflictBudget = false;
     std::seed_seq seed{baseSeed, static_cast<std::uint32_t>(wid)};
     std::mt19937 rng(seed);
     lbool sat = l_False;
@@ -176,6 +177,7 @@ void ParPMinimalMO::searchFromRandomizedInitialSolutions(
                (sat == l_Undef || w.solver->conflict.size() > 0));
 
     if (sat == l_True) {
+      w.useConflictBudget = true;
       w.time1stSol = cpuTime() - initialTime;
       std::osyncstream(std::cout)
           << getSolverId()

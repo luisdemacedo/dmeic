@@ -51,6 +51,9 @@ endif
 ifeq ($(DDEBUG_SAMPLING),1)
 CFLAGS     += -DDEBUG_SAMPLING
 endif
+ifeq ($(DEBUG_SATCALLS),1)
+CFLAGS     += -DDEBUG_SATCALLS
+endif
 
 # Some solvers do not have a template.mk file any more
 # E.g.: Minisat or Riss

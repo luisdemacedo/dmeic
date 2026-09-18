@@ -98,6 +98,7 @@ protected:
     invRootLits_t invObjRootLits = std::make_shared<std::map<int, int>>();
 
     int nConflicts = -1;
+    bool useConflictBudget = true;
     int nreencodes = 0;
     uint64_t fubs[MAXDIM] = {};
 

@@ -813,7 +813,7 @@ MaxSAT *buildSolver(int argc, char **argv) {
     break;
   case _ALGORITHM_PARPMINIMAL_:
     S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
-                          pb, pbobjf, n_moco_workers, share_clauses);
+                          pb, pbobjf, n_moco_workers, share_clauses, conf_budget);
     break;
   case _ALGORITHM_PARSLIDEDRILL_:
     S = new ParSlideDrillShuntMO(verbosity, weight, partition_strategy,

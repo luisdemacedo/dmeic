@@ -399,7 +399,7 @@ lbool ParallelMO::solve(size_t wid) {
          "%sc sat_call_begin call=%d assumptions=%d budget_left=%d "
          "conflicts_before=%lu\n",
          getSolverId().c_str(), w.nbSatCalls, w.assumptions.size(),
-         w.nConflicts, w.solver->conflicts);
+         w.useConflictBudget ? w.nConflicts : -1, w.solver->conflicts);
 
     auto start = std::chrono::steady_clock::now();
     lbool res = w.solver->solveLimited(w.assumptions);
@@ -423,7 +423,7 @@ lbool ParallelMO::solve(size_t wid) {
          "delta_conflicts=%lu conflicts_after=%lu budget_left=%d\n",
          getSolverId().c_str(), w.nbSatCalls, res_str, metrics.elapsed_ms,
          w.solver->conflicts - metrics.conflicts_before, w.solver->conflicts,
-         w.nConflicts);
+         w.useConflictBudget ? w.nConflicts : -1);
   };
 
   lbool res;
@@ -432,7 +432,7 @@ lbool ParallelMO::solve(size_t wid) {
   res = metrics.res;
   end_sat_call(metrics);
 #else
-  if (conflict_limit < 0) {
+  if (!w.useConflictBudget || conflict_limit < 0) {
     w.solver->budgetOff();
     auto metrics = begin_sat_call();
     end_sat_call(metrics);
@@ -441,6 +441,9 @@ lbool ParallelMO::solve(size_t wid) {
 
   // signals the exhaustion of the budget. Reset the limit, and go on
   if (w.nConflicts < 0) {
+    DLOG(LogCategory::SatCalls, stdout,
+         "%sc conflict budget exhausted worker=%zu calls=%d conflicts=%lu\n",
+         getSolverId().c_str(), wid, w.nbSatCalls, w.solver->conflicts);
     w.nConflicts = conflict_limit;
     return l_Undef;
   }
