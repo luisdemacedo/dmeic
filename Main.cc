@@ -66,6 +66,7 @@
 #include "algorithms/Alg_OLL.h"
 #include "algorithms/Alg_PMinimalMO.h"
 #include "algorithms/Alg_ParPMinimalMO.h"
+#include "algorithms/Alg_ParHittingSetsMO.h"
 #include "algorithms/Alg_PartMSU3.h"
 #include "algorithms/Alg_UnsatSatBudgetMO.h"
 #include "algorithms/Alg_UnsatSatMO.h"
@@ -253,9 +254,10 @@ IntOption
               "29=portfolio, "
               "30=parpminimal,"
               "31=parsd,"
-              "32=parus)."
+              "32=parus,"
+              "33=parhs)."
               "\n",
-              7, IntRange(0, 32));
+              7, IntRange(0, 33));
 
 IntOption partition_strategy("PartMSU3", "partition-strategy",
                              "Partition strategy (0=sequential, "
@@ -813,7 +815,8 @@ MaxSAT *buildSolver(int argc, char **argv) {
     break;
   case _ALGORITHM_PARPMINIMAL_:
     S = new ParPMinimalMO(verbosity, weight, partition_strategy, cardinality,
-                          pb, pbobjf, n_moco_workers, share_clauses, conf_budget);
+                          pb, pbobjf, n_moco_workers, share_clauses,
+                          conf_budget);
     break;
   case _ALGORITHM_PARSLIDEDRILL_:
     S = new ParSlideDrillShuntMO(verbosity, weight, partition_strategy,
@@ -825,6 +828,11 @@ MaxSAT *buildSolver(int argc, char **argv) {
     S = new ParUnsatSatMO(verbosity, weight, partition_strategy, cardinality,
                           pb, pbobjf, conf_budget, n_moco_workers,
                           share_clauses, ascend, lower, wl_type, stride);
+    break;
+  case _ALGORITHM_PARHITTINGSETS_:
+    S = new ParHittingSetsMO(verbosity, weight, partition_strategy,
+                             cardinality, pb, pbobjf, n_moco_workers,
+                             share_clauses, conf_budget);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");

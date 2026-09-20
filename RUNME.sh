@@ -118,6 +118,11 @@ function main(){
 	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
 			    -formula=1 -algorithm=32 -pbobjf=4 -eps=1\
 			    -apmode=1 -no-cubounds -no-clbounds "$wl_type_default" "${extra_args[@]}" "$instance" ;;
+	parhs)
+		         # gdb --args \
+	    "$openwbo_solver" -cardinality=1 -pb=2 -no-bmo \
+			    -formula=1 -algorithm=33 -pbobjf=4 -eps=1\
+			    -apmode=1 -no-cubounds -no-clbounds "${extra_args[@]}" "$instance" ;;
 
    *)
 	echo "Check name of the algorithm to run: \"$algorithm\" is not valid."

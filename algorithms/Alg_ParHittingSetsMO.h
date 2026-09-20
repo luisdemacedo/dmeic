@@ -31,8 +31,12 @@ class ParHittingSetsMO : public virtual ParallelMO, public virtual MasterMO {
 public:
   ParHittingSetsMO(int verb = _VERBOSITY_MINIMAL_, int weight = _WEIGHT_NONE_,
                    int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
-                   int pb = _PB_SWC_, int pbobjf = _PB_GTE_)
-      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf) {
+                   int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
+                   size_t nWorkers = 2, bool clausesharing = false,
+                   int conf_budget = -1)
+      : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
+                   clausesharing) {
+    setConflictLimit(conf_budget);
     optim_sliced = new UnsatSatIncHSMO(verb, weight, strategy, enc, pb, pbobjf);
     optim = optim_sliced;
   }
@@ -42,12 +46,20 @@ public:
       delete optim;
     optim = NULL;
   }
+
+  struct CandidateSolution {
+    int id;
+    Model model;
+    Solution::notes_t bvar;
+  };
+
   void vectorVec(const std::vector<Lit> &vector, vec<Lit> &vec);
+  void search_MO() override;
   void genLowerBoundSet();
   bool buildWorkFormula();
   void incrementFormula();
-  bool absorb(Solution::OneSolution &osol, int bvar);
-  bool diagnose(Solution::OneSolution &osol, vec<Lit> &);
+  bool absorb(size_t wid, CandidateSolution &csol);
+  bool diagnose(const std::vector<vec<Lit>> &unsatCores);
   bool virtual recycleLowerBoundSet();
   void initializeOptimizer(Solver *solv, MaxSATFormula *mxf) override;
   void consolidateSolution() override;
