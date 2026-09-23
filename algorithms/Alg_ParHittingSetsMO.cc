@@ -222,6 +222,16 @@ void ParHittingSetsMO::consolidateSolution() {
 
 void ParHittingSetsMO::search_MO() {
   build();
+
+  constexpr size_t initialWorker = 0;
+  if (!firstSolution(initialWorker)) {
+    answerType = _UNSATISFIABLE_;
+    printAnswer(answerType);
+    return;
+  }
+
+  solution().pushSafe(workers[initialWorker].first.model());
+  ParallelMO::consolidateSolution(initialWorker);
   buildWorkFormula();
 
   StatusCode res = _UNKNOWN_;
