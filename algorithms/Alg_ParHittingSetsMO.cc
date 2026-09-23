@@ -61,6 +61,7 @@ bool ParHittingSetsMO::absorb(size_t wid, CandidateSolution &csol) {
     auto bvar = csol.bvar;
     // removes elements of solution that are dominated by m.
     if (w.solutions.pushSafe(m, bvar, true, true)) {
+      sharedSolutions->syncSolutions({w.solutions.oneSolution()}, wid, false);
       auto runtime = cpuTime();
 #pragma omp critical(runtimestats)
       {
@@ -181,14 +182,6 @@ bool ParHittingSetsMO::recycleLowerBoundSet() {
 
     worker.solutions.clear();
   }
-
-  std::vector<Solution::OneSolution> front;
-  front.reserve(solution().size());
-  for (auto &entry : solution())
-    front.push_back(entry.second.first);
-
-  if (!front.empty())
-    sharedSolutions->syncSolutions(front, 0, false);
 
   return andf;
 }
