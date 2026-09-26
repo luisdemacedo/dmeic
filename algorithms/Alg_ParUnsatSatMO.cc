@@ -1,8 +1,8 @@
 #include "Alg_ParUnsatSatMO.h"
-#include <cmath>
 #include "../Pareto.h"
 #include "core/SolverTypes.h"
 #include <algorithm> // std::max
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -161,6 +161,20 @@ void ParUnsatSatMO::exploreFencedRegion(size_t wid, const YPoint &yp) {
   shareSolutions(wid, true);
 
   std::vector<YPoint> newULs = generateExpansionPoints(wid, ul);
+
+  switch (expansion_order) {
+  case 1:
+    std::reverse(newULs.begin(), newULs.end());
+    break;
+  case 2: {
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::shuffle(newULs.begin(), newULs.end(), rng);
+    break;
+  }
+  default:
+    break;
+  }
+
 #pragma omp critical(work_state)
   {
     for (const auto &newUL : newULs)

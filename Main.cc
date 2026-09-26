@@ -65,8 +65,8 @@
 #include "algorithms/Alg_Naive.h"
 #include "algorithms/Alg_OLL.h"
 #include "algorithms/Alg_PMinimalMO.h"
-#include "algorithms/Alg_ParPMinimalMO.h"
 #include "algorithms/Alg_ParHittingSetsMO.h"
+#include "algorithms/Alg_ParPMinimalMO.h"
 #include "algorithms/Alg_PartMSU3.h"
 #include "algorithms/Alg_UnsatSatBudgetMO.h"
 #include "algorithms/Alg_UnsatSatMO.h"
@@ -383,6 +383,11 @@ IntOption n_moco_workers("Parallel MOCO", "nworkers",
 DoubleOption stride("Parallel MOCO", "stride",
                     "Stride for parallel MOCO (ParUnsatSat only).\n", 1.0,
                     DoubleRange(1.0, true, 64.0, true));
+
+IntOption expansion_order(
+    "Parallel MOCO", "expansion-order",
+    "ParUS expansion order (0=original, 1=reverse, 2=shuffle).\n", 0,
+    IntRange(0, 2));
 
 BoolOption
     stop_search_flag("Portfolio", "stop-search-flag",
@@ -827,12 +832,13 @@ MaxSAT *buildSolver(int argc, char **argv) {
   case _ALGORITHM_PARUNSATSAT_:
     S = new ParUnsatSatMO(verbosity, weight, partition_strategy, cardinality,
                           pb, pbobjf, conf_budget, n_moco_workers,
-                          share_clauses, ascend, lower, wl_type, stride);
+                          share_clauses, ascend, lower, wl_type, stride,
+                          expansion_order);
     break;
   case _ALGORITHM_PARHITTINGSETS_:
-    S = new ParHittingSetsMO(verbosity, weight, partition_strategy,
-                             cardinality, pb, pbobjf, n_moco_workers,
-                             share_clauses, conf_budget);
+    S = new ParHittingSetsMO(verbosity, weight, partition_strategy, cardinality,
+                             pb, pbobjf, n_moco_workers, share_clauses,
+                             conf_budget);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");

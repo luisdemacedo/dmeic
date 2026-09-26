@@ -36,12 +36,13 @@ public:
                 int pb = _PB_SWC_, int pbobjf = _PB_GTE_, int core_budget = -1,
                 size_t nWorkers = 2, bool clausesharing = false,
                 bool ascend = false, bool lower = false, int wl_type = 0,
-                double stride = 1.0)
+                double stride = 1.0, int expansion_order = 0)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
                    clausesharing) {
     waiting_list = waiting_list::construct(wl_type, lower, ascend);
     conflict_limit = core_budget;
     this->stride = stride;
+    this->expansion_order = expansion_order;
   }
 
   // std::vector<MyPartition> generate();
@@ -60,6 +61,7 @@ protected:
   vec<Lit> explanation{}; // unsat explanation
   std::set<Lit> blockedVars{};
   double stride = 1.0;
+  int expansion_order = 0;
 
   virtual bool rootedSearch(const YPoint &yp);
   YPoint marker{};
