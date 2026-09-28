@@ -196,7 +196,10 @@ void ParHittingSetsMO::incrementFormula() {
       slice.insert(el);
     vec<Lit> vecDiag(diag.clause().size());
     vectorVec(diag.clause(), vecDiag);
-    optim->getSolver()->addClause(vecDiag);
+    if (auto *parallel = dynamic_cast<ParUnsatSatIncHSMO *>(optim_sliced))
+      parallel->addDiagnosis(vecDiag);
+    else
+      optim->getSolver()->addClause(vecDiag);
   }
 
   optim_sliced->thaw(slice);

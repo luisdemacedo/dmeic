@@ -8,7 +8,7 @@
 #include "../MaxSAT.h"
 #include "./Alg_PBtoCNF.h"
 #include "./Alg_ServerMO.h"
-#include "./Alg_UnsatSatIncHSMO.h"
+#include "./Alg_ParUnsatSatIncHSMO.h"
 #include "./Alg_UnsatSatMO.h"
 #include "./Alg_UnsatSatMSU3MO.h"
 #include "./Alg_UnsatSatStratMSU3MO.h"
@@ -33,11 +33,24 @@ public:
                    int strategy = _WEIGHT_NONE_, int enc = _CARD_MTOTALIZER_,
                    int pb = _PB_SWC_, int pbobjf = _PB_GTE_,
                    size_t nWorkers = 2, bool clausesharing = false,
-                   int conf_budget = -1)
+                   int conf_budget = -1, int optimizerWorkers = -1,
+                   double optimizerStride = 1.0, int expansionOrder = 0)
       : ParallelMO(verb, weight, strategy, enc, pb, pbobjf, nWorkers,
                    clausesharing) {
     setConflictLimit(conf_budget);
-    optim_sliced = new UnsatSatIncHSMO(verb, weight, strategy, enc, pb, pbobjf);
+    if (optimizerWorkers == 0)
+      optim_sliced = new UnsatSatIncHSMO(verb, weight, strategy, enc, pb, pbobjf);
+    else
+      optim_sliced = new ParUnsatSatIncHSMO(
+          verb, weight, strategy, enc, pb, pbobjf,
+          optimizerWorkers < 0 ? nWorkers : optimizerWorkers, clausesharing,
+          optimizerStride, expansionOrder);
+    if (optimizerWorkers == 0)
+      printf("c ParHS feasibility workers: %zu, optimizer: sequential\n",
+             nWorkers);
+    else
+      printf("c ParHS feasibility workers: %zu, optimizer workers: %zu\n",
+             nWorkers, optimizerWorkers < 0 ? nWorkers : size_t(optimizerWorkers));
     optim = optim_sliced;
   }
 

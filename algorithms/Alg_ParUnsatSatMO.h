@@ -67,7 +67,6 @@ protected:
   YPoint marker{};
   std::shared_ptr<waiting_list::WaitingListI> waiting_list;
 };
-
 } // namespace openwbo
 
 #endif

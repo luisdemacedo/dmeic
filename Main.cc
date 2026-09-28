@@ -380,13 +380,17 @@ IntOption n_moco_workers("Parallel MOCO", "nworkers",
                          "Number of threads to use for parallel MOCO.\n", 4,
                          IntRange(1, 64));
 
+IntOption n_hs_optimizer_workers("Parallel MOCO", "optimizer-nworkers",
+                                "ParHS optimizer workers (-1: match nworkers, 0: sequential).\n",
+                                -1, IntRange(-1, 64));
+
 DoubleOption stride("Parallel MOCO", "stride",
-                    "Stride for parallel MOCO (ParUnsatSat only).\n", 1.0,
+                    "Stride for ParUnsatSat and the ParHS optimizer.\n", 1.0,
                     DoubleRange(1.0, true, 64.0, true));
 
 IntOption expansion_order(
     "Parallel MOCO", "expansion-order",
-    "ParUS expansion order (0=original, 1=reverse, 2=shuffle).\n", 0,
+    "ParUS and ParHS optimizer expansion order (0=original, 1=reverse, 2=shuffle).\n", 0,
     IntRange(0, 2));
 
 BoolOption
@@ -838,7 +842,8 @@ MaxSAT *buildSolver(int argc, char **argv) {
   case _ALGORITHM_PARHITTINGSETS_:
     S = new ParHittingSetsMO(verbosity, weight, partition_strategy, cardinality,
                              pb, pbobjf, n_moco_workers, share_clauses,
-                             conf_budget);
+                             conf_budget, n_hs_optimizer_workers, stride,
+                             expansion_order);
     break;
   default:
     printf("c Error: Invalid MaxSAT algorithm.\n");
